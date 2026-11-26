@@ -24,6 +24,7 @@
 
 use bevy::input::keyboard::{Key, KeyboardInput, NativeKey};
 use bevy::input::InputSystems;
+use bevy::ecs::system::RunSystemOnce;
 use bevy::prelude::*;
 use bevy_fairy::{apply_pending_input, typed, DebugCursor, InputAction, PendingInput};
 
@@ -588,5 +589,50 @@ fn a_typed_character_is_shaped_like_a_real_one() {
         message.key_code,
         KeyCode::Unidentified(bevy::input::keyboard::NativeKeyCode::Unidentified),
         "a character that arrived has no physical origin this process can know"
+    );
+}
+
+/// **The route a caller actually uses: the `bevy_fairy/input` method with a `Tap`.**
+///
+/// `a_tap_presses_for_one_frame_and_releases_the_next` queues `PendingInput` directly, which is what
+/// `handle_input` does — but that is the *implementation*, and `bevy_fairy/input` answers `success: true`
+/// and leaves `ButtonInput` untouched on a running host (`bevy_fairy#16`). So this test goes through the
+/// method's own body, with the JSON a caller sends, and then runs the frame the way the plugin schedules
+/// it: `apply_pending_input` before `InputSystems`.
+///
+/// It fails the moment the method accepts a tap and writes nothing, which is the reported defect.
+#[test]
+fn the_input_methods_tap_reaches_button_input() {
+    let mut app = app_correctly_ordered();
+    let params = serde_json::json!({
+        "kind": "Keyboard",
+        "key": "KeyQ",
+        "action": "Tap"
+    });
+    // **`run_system_once_with`, because the method takes `ResMut<PendingInput>`** — a system's own
+    // parameter, which cannot be built by hand outside one. `plugin_guide_steps.rs` reads its method the
+    // same way, so this is the crate's established route to a BRP body.
+    match app
+        .world_mut()
+        .run_system_once_with(bevy_fairy::handle_input, Some(params))
+    {
+        Ok(Ok(_)) => {}
+        other => panic!("`bevy_fairy/input` with a Keyboard Tap must answer success: {other:?}"),
+    }
+
+    // The frame the plugin runs: `apply_pending_input` before `InputSystems`.
+    app.update();
+    let keys = app.world().resource::<ButtonInput<KeyCode>>();
+    assert!(
+        keys.just_pressed(KeyCode::KeyQ),
+        "**the method answered success and the key never reached `ButtonInput`** (bevy_fairy#16). \
+         `Tap` writes a `Pressed` and defers the `Released`, so the next frame must show it as \
+         just-pressed; an empty `ButtonInput` means the method's own path lost it."
+    );
+    app.update();
+    let keys = app.world().resource::<ButtonInput<KeyCode>>();
+    assert!(
+        keys.just_released(KeyCode::KeyQ),
+        "and released on the frame after, the way a physical key behaves"
     );
 }
