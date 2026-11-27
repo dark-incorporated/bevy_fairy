@@ -284,6 +284,11 @@ required-features = ["plugin"]
 name = "plugin_input_params"
 required-features = ["plugin"]
 
+# A running game on a socket: `RemoteHttpPlugin` and JSON-RPC over HTTP, the route a caller takes.
+[[test]]
+name = "plugin_input_over_http"
+required-features = ["plugin"]
+
 [[test]]
 name = "plugin_ui_text"
 required-features = ["plugin-ui-text"]

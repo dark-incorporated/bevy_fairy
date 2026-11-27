@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Added
+
+- **`bevy_fairy/input` is tested over a real socket** (`tests/plugin_input_over_http.rs`, issue #16). Each test starts a game with `RemoteHttpPlugin` on a free port, sends JSON-RPC over HTTP the way an agent's client does, and reads what an `Update` system saw in `ButtonInput<KeyCode>` on every frame. The other input tests queue `PendingInput` or run the handler in-process, so none of them crossed the transport. Held: a `Tap` is `just_pressed` on exactly one frame, `pressed` on that frame only and released on the next; `Ctrl+7` tapped under a held `ControlLeft` fires once, as it does sent key by key; the call #16 measured, `{"key":"Digit7","modifiers":["ControlLeft"],"action":"Tap"}`, is refused naming `modifiers` and moves no key. At `06c9c18` (v0.3.1) that call was answered `success: true` and tapped a bare `7`, because unknown fields were dropped until B-121 (0.12.0).
+- **`docs/guide/input.md` says how to send a chord**: `Press` the modifier, tap the key, `Release` the modifier. The page's key calls, the chord's included, are read out of the page by the test above and sent as written, so the documented form is the tested form.
+
 ## 0.13.0 - 2026-11-06
 
 Covers everything since 0.12.0 (semver-checks: 4 major checks: `ScreenshotParams.region`,

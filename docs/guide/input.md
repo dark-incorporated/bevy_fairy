@@ -11,7 +11,9 @@ The agent sends input through `brp` with the method `bevy_fairy/input`:
 ```
 
 Input is written into Bevy's own input messages before its input systems run, so `just_pressed`,
-text fields and `ButtonInput` all see it like a real key.
+text fields and `ButtonInput` all see it like a real key. `tests/plugin_input_over_http.rs` sends
+this page's key calls over HTTP to a running game, as written here, and checks what an `Update`
+system sees.
 
 A field the chosen `kind` does not read is refused by name, never ignored: there is no `modifiers`, a
 `Mouse` call takes no `x`/`y` (aim with a `Cursor` call first), and a `Scroll` needs `x` and/or `y`.
@@ -19,6 +21,21 @@ A field the chosen `kind` does not read is refused by name, never ignored: there
 A Back, Forward or Other mouse press reaches `ButtonInput<MouseButton>` and the message stream only:
 `bevy_picking` skips those buttons, so no `bevy_ui` button and no pointer observer can see them, and
 the reply's `note` says so.
+
+## Chords
+
+A chord is the modifier held around a tap: three calls, in this order.
+
+```jsonc
+{"kind": "Keyboard", "key": "ControlLeft", "action": "Press"}    // hold the modifier
+{"kind": "Keyboard", "key": "Digit7"}                            // tap the key under it
+{"kind": "Keyboard", "key": "ControlLeft", "action": "Release"}  // let the modifier go
+```
+
+On the frame the key goes down the modifier is held, so a binding that reads
+`pressed(ControlLeft) && just_pressed(Digit7)` fires once, the same as when each key is pressed and
+released by its own call. There is no `modifiers` field. A call that sends one is refused; before
+0.12.0 it was dropped, the bare key was tapped and the reply said `success: true` (issue #16).
 
 ## The pointer reaches picking
 
