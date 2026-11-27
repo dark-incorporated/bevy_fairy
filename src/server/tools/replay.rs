@@ -1,4 +1,4 @@
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
 use std::time::UNIX_EPOCH;
@@ -23,9 +23,8 @@ fn get_recording_state() -> &'static RecordingState {
 }
 
 fn get_playback_controller() -> &'static Arc<RwLock<PlaybackController>> {
-    PLAYBACK_CONTROLLER.get_or_init(|| {
-        Arc::new(RwLock::new(PlaybackController::new(Box::new(DirectSync))))
-    })
+    PLAYBACK_CONTROLLER
+        .get_or_init(|| Arc::new(RwLock::new(PlaybackController::new(Box::new(DirectSync)))))
 }
 
 fn get_branch_manager() -> &'static Arc<RwLock<TimelineBranchManager>> {
@@ -185,7 +184,10 @@ async fn handle_stop(_arguments: Value, _brp_client: Arc<RwLock<BrpClient>>) -> 
     // What the recording actually holds, so a caller can see it is not empty and can see what it
     // left out.
     let entities_recorded: usize = frames.iter().map(|frame| frame.entities.len()).sum();
-    let frames_with_entities = frames.iter().filter(|frame| !frame.entities.is_empty()).count();
+    let frames_with_entities = frames
+        .iter()
+        .filter(|frame| !frame.entities.is_empty())
+        .count();
 
     Ok(json!({
         "success": true,
@@ -834,7 +836,7 @@ async fn handle_merge_branch(
             return Ok(json!({
                 "error": "Invalid strategy",
                 "message": "Strategy must be 'take_source', 'take_target', or 'manual'",
-            }))
+            }));
         }
     };
 
@@ -1002,9 +1004,11 @@ mod tests {
             bevy_brp_host: "localhost".to_string(),
             bevy_brp_port: 15702,
             mcp_port: 3000,
-        ..Default::default()
+            ..Default::default()
         };
-        let brp_client = Arc::new(RwLock::new(crate::server::brp_client::BrpClient::new(&config)));
+        let brp_client = Arc::new(RwLock::new(crate::server::brp_client::BrpClient::new(
+            &config,
+        )));
 
         let result = handle(json!({"action": "status"}), brp_client)
             .await
@@ -1021,9 +1025,11 @@ mod tests {
             bevy_brp_host: "localhost".to_string(),
             bevy_brp_port: 15702,
             mcp_port: 3000,
-        ..Default::default()
+            ..Default::default()
         };
-        let brp_client = Arc::new(RwLock::new(crate::server::brp_client::BrpClient::new(&config)));
+        let brp_client = Arc::new(RwLock::new(crate::server::brp_client::BrpClient::new(
+            &config,
+        )));
 
         let result = handle(json!({"action": "record"}), brp_client)
             .await

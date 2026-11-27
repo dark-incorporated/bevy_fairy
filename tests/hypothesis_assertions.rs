@@ -7,18 +7,21 @@
 
 use std::sync::Arc;
 
-use axum::{routing::post, Json, Router};
+use axum::{Json, Router, routing::post};
 use bevy_fairy::server::brp_client::BrpClient;
 use bevy_fairy::server::config::Config;
 use bevy_fairy::server::experiment_system::Restoration;
 use bevy_fairy::server::hypothesis_system::{Assertion, Predicate};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use tokio::net::TcpListener;
 
 async fn answer(body: String) -> Json<Value> {
     let request: Value = serde_json::from_str(&body).expect("the client sends JSON");
     let id = request.get("id").cloned().unwrap_or(Value::Null);
-    let method = request.get("method").and_then(Value::as_str).unwrap_or_default();
+    let method = request
+        .get("method")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
     let result = match method {
         "rpc.discover" => Ok(json!({})),
         "world.query" => Ok(json!([
@@ -50,7 +53,9 @@ async fn client() -> BrpClient {
 
 async fn eval(a: Assertion) -> Result<bool, String> {
     let mut c = client().await;
-    a.evaluate(&mut c, &mut Restoration::default()).await.map_err(|e| e.to_string())
+    a.evaluate(&mut c, &mut Restoration::default())
+        .await
+        .map_err(|e| e.to_string())
 }
 
 fn exists(types: &[&str], count: Option<usize>) -> Assertion {
@@ -83,7 +88,10 @@ async fn entity_exists_is_true_for_a_short_name_the_game_has() {
 async fn entity_exists_count_is_the_exact_number_of_matching_entities() {
     assert_eq!(eval(exists(&["Transform"], Some(2))).await, Ok(true));
     assert_eq!(eval(exists(&["Transform"], Some(5))).await, Ok(false));
-    assert_eq!(eval(exists(&["Transform", "Health"], Some(1))).await, Ok(true));
+    assert_eq!(
+        eval(exists(&["Transform", "Health"], Some(1))).await,
+        Ok(true)
+    );
 }
 
 #[tokio::test]
@@ -104,7 +112,12 @@ async fn component_matches_is_refused_not_assumed_true() {
         component_type: "Health".to_string(),
         predicate: Predicate::GreaterThan { value: json!(1000) },
     };
-    let err = eval(a).await.expect_err("an assertion the server cannot evaluate is refused");
-    assert!(err.contains("component_matches"), "names the assertion: {err}");
+    let err = eval(a)
+        .await
+        .expect_err("an assertion the server cannot evaluate is refused");
+    assert!(
+        err.contains("component_matches"),
+        "names the assertion: {err}"
+    );
     let _ = Arc::new(());
 }

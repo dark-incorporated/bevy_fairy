@@ -22,10 +22,10 @@
 //! 3. **Typing.** A whole string is one frame's worth of messages, every character releases, and text
 //!    waits a frame behind the keystroke that opened the field it is going into.
 
-use bevy::input::keyboard::{Key, KeyboardInput, NativeKey};
 use bevy::input::InputSystems;
+use bevy::input::keyboard::{Key, KeyboardInput, NativeKey};
 use bevy::prelude::*;
-use bevy_fairy::{apply_pending_input, typed, DebugCursor, InputAction, PendingInput};
+use bevy_fairy::{DebugCursor, InputAction, PendingInput, apply_pending_input, typed};
 
 /// What an ordinary `Update` system saw, one entry per frame.
 #[derive(Resource, Default)]
@@ -250,13 +250,21 @@ fn a_cursor_move_lands_and_clearing_releases_it() {
         .resource_mut::<PendingInput>()
         .queue_cursor(Some(Vec2::new(120.0, 64.0)));
     app.update();
-    assert_eq!(app.world().resource::<DebugCursor>().0, Some(Vec2::new(120.0, 64.0)));
+    assert_eq!(
+        app.world().resource::<DebugCursor>().0,
+        Some(Vec2::new(120.0, 64.0))
+    );
 
     // No per-frame stream to keep up: a position is state, not an edge.
     app.update();
-    assert_eq!(app.world().resource::<DebugCursor>().0, Some(Vec2::new(120.0, 64.0)));
+    assert_eq!(
+        app.world().resource::<DebugCursor>().0,
+        Some(Vec2::new(120.0, 64.0))
+    );
 
-    app.world_mut().resource_mut::<PendingInput>().queue_cursor(None);
+    app.world_mut()
+        .resource_mut::<PendingInput>()
+        .queue_cursor(None);
     app.update();
     assert_eq!(app.world().resource::<DebugCursor>().0, None);
 }
@@ -276,7 +284,11 @@ fn a_move_before_an_untouched_button_applies_in_the_same_frame() {
         Some(Vec2::new(10.0, 20.0)),
         "the aim has to land on the frame the press is read"
     );
-    assert!(app.world().resource::<ButtonInput<MouseButton>>().pressed(MouseButton::Left));
+    assert!(
+        app.world()
+            .resource::<ButtonInput<MouseButton>>()
+            .pressed(MouseButton::Left)
+    );
 }
 
 /// **A press must be read where it was aimed**, so a move queued after one waits a frame.
@@ -316,9 +328,15 @@ fn two_moves_in_one_batch_are_spread_over_two_frames() {
         pending.queue_cursor(Some(Vec2::new(2.0, 2.0)));
     }
     app.update();
-    assert_eq!(app.world().resource::<DebugCursor>().0, Some(Vec2::new(1.0, 1.0)));
+    assert_eq!(
+        app.world().resource::<DebugCursor>().0,
+        Some(Vec2::new(1.0, 1.0))
+    );
     app.update();
-    assert_eq!(app.world().resource::<DebugCursor>().0, Some(Vec2::new(2.0, 2.0)));
+    assert_eq!(
+        app.world().resource::<DebugCursor>().0,
+        Some(Vec2::new(2.0, 2.0))
+    );
 }
 
 /// **The injected pointer wins while it is set, and the window's own is read otherwise.**
@@ -363,21 +381,40 @@ fn a_release_does_not_overtake_the_moves_queued_before_it() {
     }
     // Frame 0: aim and press together — the one pairing that is correct in one frame.
     app.update();
-    assert_eq!(app.world().resource::<DebugCursor>().0, Some(Vec2::new(100.0, 100.0)));
-    assert!(app.world().resource::<ButtonInput<MouseButton>>().pressed(MouseButton::Left));
+    assert_eq!(
+        app.world().resource::<DebugCursor>().0,
+        Some(Vec2::new(100.0, 100.0))
+    );
+    assert!(
+        app.world()
+            .resource::<ButtonInput<MouseButton>>()
+            .pressed(MouseButton::Left)
+    );
 
     // Frame 1: the drag moves, and the button is still held.
     app.update();
-    assert_eq!(app.world().resource::<DebugCursor>().0, Some(Vec2::new(140.0, 130.0)));
+    assert_eq!(
+        app.world().resource::<DebugCursor>().0,
+        Some(Vec2::new(140.0, 130.0))
+    );
     assert!(
-        app.world().resource::<ButtonInput<MouseButton>>().pressed(MouseButton::Left),
+        app.world()
+            .resource::<ButtonInput<MouseButton>>()
+            .pressed(MouseButton::Left),
         "the release must not have jumped the queue"
     );
 
     // Frame 2: the last move, and only then the release — at the far corner, where it was aimed.
     app.update();
-    assert_eq!(app.world().resource::<DebugCursor>().0, Some(Vec2::new(180.0, 160.0)));
-    assert!(app.world().resource::<ButtonInput<MouseButton>>().just_released(MouseButton::Left));
+    assert_eq!(
+        app.world().resource::<DebugCursor>().0,
+        Some(Vec2::new(180.0, 160.0))
+    );
+    assert!(
+        app.world()
+            .resource::<ButtonInput<MouseButton>>()
+            .just_released(MouseButton::Left)
+    );
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -435,7 +472,10 @@ fn every_typed_character_is_released_and_nothing_stays_pressed() {
         "a typed character that is never released stays pressed for the life of the app"
     );
     assert_eq!(
-        world.resource::<ButtonInput<KeyCode>>().get_pressed().count(),
+        world
+            .resource::<ButtonInput<KeyCode>>()
+            .get_pressed()
+            .count(),
         0,
         "and the physical side must be clean too"
     );
@@ -454,7 +494,9 @@ fn a_named_key_carries_both_halves() {
     app.update();
 
     assert!(
-        app.world().resource::<ButtonInput<KeyCode>>().just_pressed(KeyCode::Escape),
+        app.world()
+            .resource::<ButtonInput<KeyCode>>()
+            .just_pressed(KeyCode::Escape),
         "the physical half must reach a `ButtonInput` reader"
     );
     assert!(
@@ -476,7 +518,9 @@ fn a_physical_only_key_states_that_it_has_no_logical_value() {
     app.update();
 
     assert!(
-        app.world().resource::<ButtonInput<KeyCode>>().just_pressed(KeyCode::KeyW),
+        app.world()
+            .resource::<ButtonInput<KeyCode>>()
+            .just_pressed(KeyCode::KeyW),
         "the physical half is exact and must still land"
     );
     assert!(
@@ -500,7 +544,11 @@ fn a_space_is_the_space_bar_not_a_character() {
 
     let frame = &heard(&app)[0];
     assert_eq!(frame.len(), 3, "three characters: {frame:?}");
-    assert_eq!(frame[1], Key::Space, "the middle one must be `Space`: {frame:?}");
+    assert_eq!(
+        frame[1],
+        Key::Space,
+        "the middle one must be `Space`: {frame:?}"
+    );
 }
 
 /// **Text waits for the frame after the keystroke that opened the field.**
@@ -583,7 +631,10 @@ fn a_typed_character_is_shaped_like_a_real_one() {
         Some("q"),
         "`text` carries the character produced, matching what a real keyboard event reports"
     );
-    assert!(!message.repeat, "an injected key is never an OS auto-repeat");
+    assert!(
+        !message.repeat,
+        "an injected key is never an OS auto-repeat"
+    );
     assert_eq!(
         message.key_code,
         KeyCode::Unidentified(bevy::input::keyboard::NativeKeyCode::Unidentified),

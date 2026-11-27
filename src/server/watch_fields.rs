@@ -9,7 +9,7 @@
 
 use std::collections::BTreeMap;
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// Most fields a reply lists. A result is read in full, so the number a caller can narrow with
 /// `pointer` is the number `fields_omitted` reports; the cut is only on what is printed.
@@ -79,7 +79,8 @@ pub fn movement(frames: &[u64], values: &[Option<&Value>]) -> Movement {
         }
     }
     let run_start = values.iter().rposition(|v| *v != last).map_or(0, |i| i + 1);
-    let constant_since_frame = (last.is_some() && run_start + 1 < values.len()).then(|| frames[run_start]);
+    let constant_since_frame =
+        (last.is_some() && run_start + 1 < values.len()).then(|| frames[run_start]);
     Movement {
         changed: first_change_frame.is_some(),
         distinct_values: distinct.len(),
@@ -103,7 +104,12 @@ pub struct Fields {
 impl Fields {
     /// The summaries as the `fields` array.
     pub fn to_json(&self) -> Value {
-        Value::Array(self.listed.iter().map(|(pointer, m)| m.to_json(pointer)).collect())
+        Value::Array(
+            self.listed
+                .iter()
+                .map(|(pointer, m)| m.to_json(pointer))
+                .collect(),
+        )
     }
 
     /// How many fields were left out of `listed`.
@@ -126,15 +132,19 @@ pub fn fields(frames: &[u64], samples: &[&Value], prefix: &str) -> Option<Fields
     let mut by_pointer: BTreeMap<String, Vec<Option<&Value>>> = BTreeMap::new();
     for (i, sample) in samples.iter().copied().enumerate() {
         collect_leaves(sample, prefix.to_string(), &mut |pointer, leaf| {
-            by_pointer.entry(pointer).or_insert_with(|| vec![None; samples.len()])[i] = Some(leaf);
+            by_pointer
+                .entry(pointer)
+                .or_insert_with(|| vec![None; samples.len()])[i] = Some(leaf);
         });
     }
     if by_pointer.len() < 2 {
         return None;
     }
     let total = by_pointer.len();
-    let mut all: Vec<(String, Movement)> =
-        by_pointer.into_iter().map(|(pointer, values)| (pointer, movement(frames, &values))).collect();
+    let mut all: Vec<(String, Movement)> = by_pointer
+        .into_iter()
+        .map(|(pointer, values)| (pointer, movement(frames, &values)))
+        .collect();
     all.sort_by(|(pa, a), (pb, b)| a.rank().cmp(&b.rank()).then_with(|| natural_order(pa, pb)));
     all.truncate(MAX_FIELDS);
     Some(Fields { total, listed: all })
@@ -152,7 +162,11 @@ fn natural_order(a: &str, b: &str) -> std::cmp::Ordering {
     a.split('/').map(key).cmp(b.split('/').map(key))
 }
 
-fn collect_leaves<'a>(value: &'a Value, pointer: String, found: &mut impl FnMut(String, &'a Value)) {
+fn collect_leaves<'a>(
+    value: &'a Value,
+    pointer: String,
+    found: &mut impl FnMut(String, &'a Value),
+) {
     match value {
         Value::Object(map) if !map.is_empty() => {
             for (key, child) in map {
@@ -179,7 +193,10 @@ mod tests {
 
     fn series(values: &[Value]) -> (Vec<u64>, Vec<&Value>) {
         // Frames 100, 101, ... one per sample.
-        ((100..).take(values.len()).collect(), values.iter().collect())
+        (
+            (100..).take(values.len()).collect(),
+            values.iter().collect(),
+        )
     }
 
     fn listed(fields: &Fields, pointer: &str) -> Movement {
@@ -199,7 +216,13 @@ mod tests {
         let refs: Vec<Option<&Value>> = refs.into_iter().map(Some).collect();
         assert_eq!(
             movement(&frames, &refs),
-            Movement { changed: true, distinct_values: 2, first_change_frame: Some(102), constant_since_frame: Some(102), absent_samples: 0 }
+            Movement {
+                changed: true,
+                distinct_values: 2,
+                first_change_frame: Some(102),
+                constant_since_frame: Some(102),
+                absent_samples: 0
+            }
         );
     }
 
@@ -220,7 +243,13 @@ mod tests {
         let refs: Vec<Option<&Value>> = refs.into_iter().map(Some).collect();
         assert_eq!(
             movement(&frames, &refs),
-            Movement { changed: false, distinct_values: 1, first_change_frame: None, constant_since_frame: Some(100), absent_samples: 0 }
+            Movement {
+                changed: false,
+                distinct_values: 1,
+                first_change_frame: None,
+                constant_since_frame: Some(100),
+                absent_samples: 0
+            }
         );
     }
 
@@ -228,17 +257,28 @@ mod tests {
     /// whole value changes at every sample, and only the per-field summary says which one stopped.
     #[test]
     fn one_field_frozen_beside_one_still_counting_is_told_apart() {
-        let values: Vec<Value> = (0..6).map(|i| json!({"angle": f64::from(i.min(3)), "frames": i})).collect();
+        let values: Vec<Value> = (0..6)
+            .map(|i| json!({"angle": f64::from(i.min(3)), "frames": i}))
+            .collect();
         let (frames, refs) = series(&values);
         let whole: Vec<Option<&Value>> = refs.iter().copied().map(Some).collect();
-        assert_eq!(movement(&frames, &whole).constant_since_frame, None, "the whole value never settles");
+        assert_eq!(
+            movement(&frames, &whole).constant_since_frame,
+            None,
+            "the whole value never settles"
+        );
 
-        let fields = fields(&frames, &refs, "/0/components/fixture_game::Spinner").expect("two fields");
+        let fields =
+            fields(&frames, &refs, "/0/components/fixture_game::Spinner").expect("two fields");
         assert_eq!(fields.total, 2);
         let angle = listed(&fields, "/0/components/fixture_game::Spinner/angle");
         assert!(angle.changed);
         assert_eq!(angle.first_change_frame, Some(101));
-        assert_eq!(angle.constant_since_frame, Some(103), "angle holds 3.0 from sample 3 on");
+        assert_eq!(
+            angle.constant_since_frame,
+            Some(103),
+            "angle holds 3.0 from sample 3 on"
+        );
         let counter = listed(&fields, "/0/components/fixture_game::Spinner/frames");
         assert_eq!(counter.constant_since_frame, None);
         assert_eq!(counter.distinct_values, 6);
@@ -246,7 +286,9 @@ mod tests {
 
     #[test]
     fn fields_that_changed_come_before_fields_that_did_not() {
-        let values: Vec<Value> = (0..3).map(|i| json!({"a": 1, "b": i, "c": 1, "d": i})).collect();
+        let values: Vec<Value> = (0..3)
+            .map(|i| json!({"a": 1, "b": i, "c": 1, "d": i}))
+            .collect();
         let (frames, refs) = series(&values);
         let fields = fields(&frames, &refs, "").expect("fields");
         let order: Vec<&str> = fields.listed.iter().map(|(p, _)| p.as_str()).collect();
@@ -255,12 +297,19 @@ mod tests {
 
     #[test]
     fn a_field_missing_from_a_sample_counts_as_a_change_not_as_null() {
-        let values = [json!({"x": 1, "y": 7}), json!({"x": 1}), json!({"x": 1, "y": null})];
+        let values = [
+            json!({"x": 1, "y": 7}),
+            json!({"x": 1}),
+            json!({"x": 1, "y": null}),
+        ];
         let (frames, refs) = series(&values);
         let fields = fields(&frames, &refs, "").expect("fields");
         let y = listed(&fields, "/y");
         assert!(y.changed);
-        assert_eq!(y.distinct_values, 3, "7, absent and null are three different states");
+        assert_eq!(
+            y.distinct_values, 3,
+            "7, absent and null are three different states"
+        );
         assert!(!listed(&fields, "/x").changed);
         assert_eq!(y.absent_samples, 1);
         assert_eq!(listed(&fields, "/x").absent_samples, 0);
@@ -270,7 +319,12 @@ mod tests {
     /// then stopped". One that is not there yet and then holds is a field that appeared.
     #[test]
     fn a_field_that_vanished_is_not_reported_as_constant() {
-        let values = [json!({"x": 1, "y": 5}), json!({"x": 1, "y": 6}), json!({"x": 1}), json!({"x": 1})];
+        let values = [
+            json!({"x": 1, "y": 5}),
+            json!({"x": 1, "y": 6}),
+            json!({"x": 1}),
+            json!({"x": 1}),
+        ];
         let (frames, refs) = series(&values);
         let fields = fields(&frames, &refs, "").expect("fields");
         let y = listed(&fields, "/y");
@@ -278,14 +332,25 @@ mod tests {
         assert_eq!(y.constant_since_frame, None, "{y:?}");
         assert_eq!(y.absent_samples, 2);
         let entries = fields.to_json();
-        assert_eq!(entries[0]["pointer"], json!("/y"), "a vanished field is listed among the moving ones, ahead of the constant x");
+        assert_eq!(
+            entries[0]["pointer"],
+            json!("/y"),
+            "a vanished field is listed among the moving ones, ahead of the constant x"
+        );
         assert_eq!(entries[0]["absent_samples"], json!(2));
-        assert!(entries[1].get("absent_samples").is_none(), "a field no sample lacked has no count: {entries}");
+        assert!(
+            entries[1].get("absent_samples").is_none(),
+            "a field no sample lacked has no count: {entries}"
+        );
     }
 
     #[test]
     fn a_field_that_appeared_and_then_held_is_constant_from_the_first_sample_that_had_it() {
-        let values = [json!({"x": 1}), json!({"x": 1, "y": 3}), json!({"x": 1, "y": 3})];
+        let values = [
+            json!({"x": 1}),
+            json!({"x": 1, "y": 3}),
+            json!({"x": 1, "y": 3}),
+        ];
         let (frames, refs) = series(&values);
         let fields = fields(&frames, &refs, "").expect("fields");
         let y = listed(&fields, "/y");
@@ -309,12 +374,21 @@ mod tests {
         let (frames, refs) = series(&values);
         let ranked = fields(&frames, &refs, "").expect("fields");
         let order: Vec<&str> = ranked.listed.iter().map(|(p, _)| p.as_str()).collect();
-        assert_eq!(order, ["/w", "/y", "/x"], "stopped, then appeared, then never moved");
+        assert_eq!(
+            order,
+            ["/w", "/y", "/x"],
+            "stopped, then appeared, then never moved"
+        );
         assert_eq!(listed(&ranked, "/w").rank(), 0);
         assert_eq!(listed(&ranked, "/y").rank(), 1);
 
         // 5, gap, 5, 5: the value never changed, it was only missing from one sample.
-        let values = [json!({"k": 5, "x": 1}), json!({"x": 1}), json!({"k": 5, "x": 1}), json!({"k": 5, "x": 1})];
+        let values = [
+            json!({"k": 5, "x": 1}),
+            json!({"x": 1}),
+            json!({"k": 5, "x": 1}),
+            json!({"k": 5, "x": 1}),
+        ];
         let (frames, refs) = series(&values);
         let fields = fields(&frames, &refs, "").expect("fields");
         let k = listed(&fields, "/k");
@@ -330,7 +404,10 @@ mod tests {
         let fields = fields(&frames, &refs, "/p").expect("fields");
         for (pointer, _) in &fields.listed {
             let resolved = json!({"p": values[0].clone()});
-            assert!(resolved.pointer(pointer).is_some(), "{pointer} does not resolve");
+            assert!(
+                resolved.pointer(pointer).is_some(),
+                "{pointer} does not resolve"
+            );
         }
         assert_eq!(fields.listed[0].0, "/p/a~1b");
         assert_eq!(fields.listed[1].0, "/p/c~0d");
@@ -344,7 +421,10 @@ mod tests {
         assert_eq!(fields.total, 3);
         assert!(listed(&fields, "/0/v/1").changed);
         assert!(!listed(&fields, "/0/v/0").changed);
-        assert!(!listed(&fields, "/1").changed, "an empty object is one field");
+        assert!(
+            !listed(&fields, "/1").changed,
+            "an empty object is one field"
+        );
     }
 
     #[test]
@@ -404,7 +484,9 @@ mod tests {
 
     #[test]
     fn array_positions_sort_as_numbers_not_as_text() {
-        let values: Vec<Value> = (0..3).map(|s| Value::Array((0..12).map(|n| json!(n + s)).collect())).collect();
+        let values: Vec<Value> = (0..3)
+            .map(|s| Value::Array((0..12).map(|n| json!(n + s)).collect()))
+            .collect();
         let (frames, refs) = series(&values);
         let fields = fields(&frames, &refs, "").expect("fields");
         let order: Vec<String> = fields.listed.iter().map(|(p, _)| p.clone()).collect();

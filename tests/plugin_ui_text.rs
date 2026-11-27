@@ -8,17 +8,23 @@
 
 use bevy::prelude::*;
 use bevy::remote::{BrpResult, RemoteMethodSystemId, RemoteMethods};
-use bevy::render::settings::{RenderCreation, WgpuSettings};
 use bevy::render::RenderPlugin;
+use bevy::render::settings::{RenderCreation, WgpuSettings};
 use bevy_fairy::DebuggerPlugin;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 #[path = "helpers/headless.rs"]
 mod headless;
 
 const SENTENCE: &str = "No stone on N1: Couriers carry them up by day";
 
-fn label(parent: &mut bevy::ecs::relationship::RelatedSpawner<ChildOf>, name: &str, text: &str, left: i32, top: i32) {
+fn label(
+    parent: &mut bevy::ecs::relationship::RelatedSpawner<ChildOf>,
+    name: &str,
+    text: &str,
+    left: i32,
+    top: i32,
+) {
     parent.spawn((
         Name::new(name.to_string()),
         Text::new(text),
@@ -70,7 +76,10 @@ fn app(ui_scale: f32) -> App {
             // Prompt: visible, at (100, 100).
             hud.spawn((
                 Name::new("PromptRoot"),
-                Node { position_type: PositionType::Absolute, ..default() },
+                Node {
+                    position_type: PositionType::Absolute,
+                    ..default()
+                },
             ))
             .with_children(|p| label(p, "PromptLabel", SENTENCE, 100, 100));
             // Toast that is up: the same sentence, 300 px lower.
@@ -78,7 +87,10 @@ fn app(ui_scale: f32) -> App {
             // Toast slot that expired: Display::None, string kept, visibility untouched.
             hud.spawn((
                 Name::new("ToastExpired"),
-                Node { display: Display::None, ..default() },
+                Node {
+                    display: Display::None,
+                    ..default()
+                },
             ))
             .with_children(|p| label(p, "ToastText", SENTENCE, 500, 100));
             // A pooled label that never had text.
@@ -122,9 +134,16 @@ fn app(ui_scale: f32) -> App {
 }
 
 fn call(app: &mut App, params: Value) -> BrpResult {
-    let id = match app.world().resource::<RemoteMethods>().get("bevy_fairy/ui_text") {
+    let id = match app
+        .world()
+        .resource::<RemoteMethods>()
+        .get("bevy_fairy/ui_text")
+    {
         Some(RemoteMethodSystemId::Instant(id)) => *id,
-        other => panic!("bevy_fairy/ui_text is not an instant method: {}", other.is_some()),
+        other => panic!(
+            "bevy_fairy/ui_text is not an instant method: {}",
+            other.is_some()
+        ),
     };
     app.world_mut().run_system_with(id, Some(params)).unwrap()
 }
@@ -134,7 +153,10 @@ fn rows(reply: &Value) -> Vec<&Value> {
 }
 
 fn names(reply: &Value) -> Vec<&str> {
-    rows(reply).iter().map(|n| n["name"].as_str().unwrap()).collect()
+    rows(reply)
+        .iter()
+        .map(|n| n["name"].as_str().unwrap())
+        .collect()
 }
 
 #[test]
@@ -198,7 +220,11 @@ fn rect_is_in_physical_pixels_under_ui_scale() {
     let mut app = app(2.0);
     let reply = call(&mut app, json!({"contains": SENTENCE})).unwrap();
     // `px(100)` at UiScale 2 is 200 physical pixels, and the target is still 1000 x 600.
-    assert_eq!(rows(&reply)[0]["rect"], json!([200, 200, 400, 80]), "{reply}");
+    assert_eq!(
+        rows(&reply)[0]["rect"],
+        json!([200, 200, 400, 80]),
+        "{reply}"
+    );
     assert_eq!(reply["target_size"], json!([1000, 600]));
 }
 
@@ -218,19 +244,47 @@ fn limit_is_applied_after_sorting_and_says_so() {
 fn a_region_reaching_past_the_u32_range_is_a_region_not_an_overflow() {
     let mut app = app(1.0);
     let everything = call(&mut app, json!({})).unwrap();
-    assert!(!rows(&everything).is_empty(), "the tree has readable text: {everything}");
+    assert!(
+        !rows(&everything).is_empty(),
+        "the tree has readable text: {everything}"
+    );
 
-    let huge = call(&mut app, json!({"region": {"x": 1, "y": 1, "width": u32::MAX, "height": u32::MAX}})).unwrap();
-    assert_eq!(names(&huge), names(&everything), "a region that covers the whole target keeps every node: {huge}");
+    let huge = call(
+        &mut app,
+        json!({"region": {"x": 1, "y": 1, "width": u32::MAX, "height": u32::MAX}}),
+    )
+    .unwrap();
+    assert_eq!(
+        names(&huge),
+        names(&everything),
+        "a region that covers the whole target keeps every node: {huge}"
+    );
 
-    let beyond = call(&mut app, json!({"region": {"x": u32::MAX, "y": 0, "width": 2, "height": 10}})).unwrap();
-    assert_eq!(beyond["matched"], json!(0), "nothing is that far right: {beyond}");
+    let beyond = call(
+        &mut app,
+        json!({"region": {"x": u32::MAX, "y": 0, "width": 2, "height": 10}}),
+    )
+    .unwrap();
+    assert_eq!(
+        beyond["matched"],
+        json!(0),
+        "nothing is that far right: {beyond}"
+    );
 }
 
 #[test]
 fn bad_params_are_refused_not_defaulted() {
     let mut app = app(1.0);
     assert!(call(&mut app, json!({"limit": 0})).is_err());
-    assert!(call(&mut app, json!({"region": {"x": 0, "y": 0, "width": 0, "height": 5}})).is_err());
-    assert!(call(&mut app, json!({"visible": true})).is_err(), "unknown field must be refused");
+    assert!(
+        call(
+            &mut app,
+            json!({"region": {"x": 0, "y": 0, "width": 0, "height": 5}})
+        )
+        .is_err()
+    );
+    assert!(
+        call(&mut app, json!({"visible": true})).is_err(),
+        "unknown field must be refused"
+    );
 }

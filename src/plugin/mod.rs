@@ -69,37 +69,37 @@ use bevy::remote::{BrpError, RemotePlugin};
 
 mod commands;
 mod input;
+mod pointer;
 mod quit;
 mod ready;
-mod pointer;
 mod ring;
 mod scene;
 mod time;
 
 #[cfg(feature = "plugin-guide")]
 mod guide;
-#[cfg(feature = "plugin-ui-text")]
-mod ui_text;
 #[cfg(feature = "plugin-screenshot")]
 mod screenshot;
+#[cfg(feature = "plugin-ui-text")]
+mod ui_text;
 
 pub use commands::{DebugCommandInfo, DebugCommands, DebugCommandsAppExt};
 pub use input::{
-    apply_pending_input, cursor_position, logical_for, typed, DebugCursor, InputAction,
-    InputCommand, InputKind, PendingInput,
+    DebugCursor, InputAction, InputCommand, InputKind, PendingInput, apply_pending_input,
+    cursor_position, logical_for, typed,
 };
 pub use ready::DebugReady;
-pub use time::ClockRequest;
 pub use scene::{SceneLog, ScenePlayback, SceneStep};
+pub use time::ClockRequest;
 
 #[cfg(feature = "plugin-guide")]
 pub use guide::{
-    evaluate_checkpoint, handle_guide, watch_guide, Checkpoints, Guide, GuideOverlay,
-    GuideOverlayPlugin, GuideParams, GuidePlacement, Step, StepRecord, BEAT_SECONDS,
+    BEAT_SECONDS, Checkpoints, Guide, GuideOverlay, GuideOverlayPlugin, GuideParams,
+    GuidePlacement, Step, StepRecord, evaluate_checkpoint, handle_guide, watch_guide,
 };
 #[cfg(feature = "plugin-screenshot")]
 pub use screenshot::{
-    handle_screenshot, CaptureState, Captures, DebugCaptureTarget, Provenance, ScreenshotParams,
+    CaptureState, Captures, DebugCaptureTarget, Provenance, ScreenshotParams, handle_screenshot,
 };
 
 // The handlers above are public so that tests and examples can drive them directly.

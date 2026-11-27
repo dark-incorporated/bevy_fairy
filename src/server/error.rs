@@ -58,7 +58,8 @@ impl ErrorContext {
             }
             Err(_) => {
                 // Fallback to timestamp-based ID
-                format!("err_{}", 
+                format!(
+                    "err_{}",
                     SystemTime::now()
                         .duration_since(UNIX_EPOCH)
                         .map(|d| d.as_nanos())
@@ -109,16 +110,34 @@ impl ErrorContext {
     fn is_sensitive_key(key: &str) -> bool {
         let key_lower = key.to_lowercase();
         let sensitive_patterns = [
-            "password", "passwd", "pwd",
-            "token", "auth", "authorization", "bearer",
-            "secret", "key", "api_key", "apikey",
-            "credential", "cred", "login",
-            "session", "cookie", "jwt",
-            "private", "signature", "hash",
-            "cert", "certificate", "pem"
+            "password",
+            "passwd",
+            "pwd",
+            "token",
+            "auth",
+            "authorization",
+            "bearer",
+            "secret",
+            "key",
+            "api_key",
+            "apikey",
+            "credential",
+            "cred",
+            "login",
+            "session",
+            "cookie",
+            "jwt",
+            "private",
+            "signature",
+            "hash",
+            "cert",
+            "certificate",
+            "pem",
         ];
-        
-        sensitive_patterns.iter().any(|pattern| key_lower.contains(pattern))
+
+        sensitive_patterns
+            .iter()
+            .any(|pattern| key_lower.contains(pattern))
     }
 
     pub fn add_recovery_suggestion(mut self, suggestion: &str) -> Self {
@@ -215,10 +234,10 @@ pub enum Error {
 
     #[error("Debug error: {0}")]
     DebugError(String),
-    
+
     #[error("Checkpoint error: {0}")]
     Checkpoint(String),
-    
+
     #[error("Invalid input: {0}")]
     InvalidInput(String),
 

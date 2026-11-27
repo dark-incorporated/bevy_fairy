@@ -15,9 +15,9 @@
 use bevy::prelude::*;
 use bevy::time::TimeSystems;
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
-use crate::plugin::commands::{add_builtin_command, DebugCommandInfo};
+use crate::plugin::commands::{DebugCommandInfo, add_builtin_command};
 
 /// Params of `bevy_fairy/time`. Both fields are optional; an empty call only reports the clock.
 #[derive(Deserialize)]
@@ -40,7 +40,10 @@ pub struct ClockRequest {
 
 impl Default for ClockRequest {
     fn default() -> Self {
-        Self { pause: false, speed: 1.0 }
+        Self {
+            pause: false,
+            speed: 1.0,
+        }
     }
 }
 
@@ -80,7 +83,10 @@ pub(crate) struct ClockState {
 /// Registers `bevy_fairy/time` as a recorded built-in command.
 pub(crate) fn register(app: &mut App, host_owned: bool) {
     app.init_resource::<ClockRequest>()
-        .insert_resource(ClockState { host_owned, ..default() })
+        .insert_resource(ClockState {
+            host_owned,
+            ..default()
+        })
         .add_systems(First, observe_clock.after(TimeSystems));
     if !host_owned {
         app.add_systems(First, apply_request.before(TimeSystems));
@@ -123,7 +129,11 @@ fn apply_request(
     apply(&request, &mut state, &mut clock);
 }
 
-fn observe_clock(request: Res<ClockRequest>, clock: Res<Time<Virtual>>, mut state: ResMut<ClockState>) {
+fn observe_clock(
+    request: Res<ClockRequest>,
+    clock: Res<Time<Virtual>>,
+    mut state: ResMut<ClockState>,
+) {
     let relative_speed = clock.relative_speed();
     state.observed = Some(Observation {
         request: *request,
@@ -133,7 +143,9 @@ fn observe_clock(request: Res<ClockRequest>, clock: Res<Time<Virtual>>, mut stat
         paused: clock.is_paused(),
         // The engine cuts a frame to exactly `max_delta` and reports the speed that gives; an
         // unclamped frame advances at the speed it was given.
-        clamped: !clock.is_paused() && clock.delta() == clock.max_delta() && clock.effective_speed() < relative_speed,
+        clamped: !clock.is_paused()
+            && clock.delta() == clock.max_delta()
+            && clock.effective_speed() < relative_speed,
     });
 }
 
@@ -175,7 +187,11 @@ fn handle_time(
             // asked to be, running when it was not, at the speed asked for. "Not paused, 1.0" is a
             // request like any other (B-129): it used to be skipped, so a host holding its own pause
             // or running its own slow motion read as `held: true` beside `paused: true`.
-            let pause_held = if request.pause { seen.delta.is_zero() } else { !seen.paused };
+            let pause_held = if request.pause {
+                seen.delta.is_zero()
+            } else {
+                !seen.paused
+            };
             // A paused clock has no effective speed to read. A request of 1.0 asks for no speed (the
             // plugin never writes 1.0 over a host's own), so a pause beside a host's slow motion is
             // held; any other speed is compared with the one the clock holds for when it resumes.

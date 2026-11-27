@@ -1,8 +1,8 @@
 use bevy::{
     prelude::*,
-    remote::{RemotePlugin, BrpResult},
     remote::http::RemoteHttpPlugin,
-    render::view::window::screenshot::{save_to_disk, Screenshot},
+    remote::{BrpResult, RemotePlugin},
+    render::view::window::screenshot::{Screenshot, save_to_disk},
 };
 use serde_json::Value;
 
@@ -10,8 +10,7 @@ fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_plugins(
-            RemotePlugin::default()
-                .with_method_main("bevy_fairy/screenshot", screenshot_handler)
+            RemotePlugin::default().with_method_main("bevy_fairy/screenshot", screenshot_handler),
         )
         .add_plugins(RemoteHttpPlugin::default())
         .add_systems(Startup, setup)
@@ -26,10 +25,7 @@ fn setup(
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     // Add a camera
-    commands.spawn((
-        Camera3d::default(),
-        Transform::from_xyz(0.0, 0.0, 5.0),
-    ));
+    commands.spawn((Camera3d::default(), Transform::from_xyz(0.0, 0.0, 5.0)));
 
     // Add a cube
     commands.spawn((
@@ -41,9 +37,7 @@ fn setup(
 
     // Add a light
     commands.spawn((
-        PointLight {
-            ..default()
-        },
+        PointLight { ..default() },
         Transform::from_xyz(4.0, 8.0, 4.0),
     ));
 }
@@ -53,10 +47,7 @@ fn setup(
 struct Cube;
 
 /// Rotate the cube each frame
-fn rotate_cube(
-    time: Res<Time>,
-    mut query: Query<&mut Transform, With<Cube>>,
-) {
+fn rotate_cube(time: Res<Time>, mut query: Query<&mut Transform, With<Cube>>) {
     for mut transform in &mut query {
         transform.rotate_y(time.delta_secs() * 0.5);
     }
@@ -79,10 +70,7 @@ fn screenshot_on_spacebar(
 }
 
 /// Custom BRP handler for screenshot requests from the debugger
-fn screenshot_handler(
-    In(params): In<Option<Value>>, 
-    mut commands: Commands,
-) -> BrpResult {
+fn screenshot_handler(In(params): In<Option<Value>>, mut commands: Commands) -> BrpResult {
     // Parse parameters from MCP request
     let path = params
         .as_ref()
@@ -99,14 +87,14 @@ fn screenshot_handler(
 
     // Note: timing controls (warmup_duration, capture_delay) are handled by the MCP server
     // before the BRP request reaches this handler
-    
+
     println!("Screenshot requested via BRP: {} -> {}", description, path);
-    
+
     // Use Bevy's built-in screenshot system
     commands
         .spawn(Screenshot::primary_window())
         .observe(save_to_disk(path.clone()));
-    
+
     // Return success response
     Ok(serde_json::json!({
         "path": path,

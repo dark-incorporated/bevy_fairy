@@ -1,4 +1,4 @@
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 /// Anomaly detection tool for automatic game state monitoring
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -7,9 +7,9 @@ use tracing::{debug, error, info, warn};
 use crate::server::anomaly_detector::{
     Anomaly, AnomalyConfig, AnomalyDetectionSystem, DetectorCoverage,
 };
-use crate::server::brp_client::{certainly_another_game, BrpClient, GameName};
+use crate::server::brp_client::{BrpClient, GameName, certainly_another_game};
 use crate::server::brp_messages::{
-    builtin_methods, entity_data_from_query_result, BrpPayload, BrpRequest,
+    BrpPayload, BrpRequest, builtin_methods, entity_data_from_query_result,
 };
 use crate::server::error::Result;
 
@@ -56,14 +56,18 @@ impl AnomalyState {
         let found = match &self.last_game {
             None => None,
             Some(then) if certainly_another_game(then, game) => {
-                self.detection_system = AnomalyDetectionSystem::new(self.detection_system.config().clone());
+                self.detection_system =
+                    AnomalyDetectionSystem::new(self.detection_system.config().clone());
                 Some(Samples::Dropped)
             }
             // Both reads came from a game that named itself, and it is the same one.
             Some(Ok(_)) if game.is_ok() => None,
             // One of the two could not name itself, and it is not known to be another process.
             Some(Err(then)) => Some(Samples::Unverified(then.why.clone())),
-            Some(Ok(_)) => game.as_ref().err().map(|now| Samples::Unverified(now.why.clone())),
+            Some(Ok(_)) => game
+                .as_ref()
+                .err()
+                .map(|now| Samples::Unverified(now.why.clone())),
         };
         self.last_game = Some(game.clone());
         found
@@ -151,17 +155,15 @@ async fn handle_detect(arguments: Value, brp_client: Arc<RwLock<BrpClient>>) -> 
     };
 
     let entities = match brp_response.payload {
-        BrpPayload::Result(value) => {
-            match entity_data_from_query_result(&value) {
-                Some(entities) => entities,
-                None => {
-                    return Ok(json!({
-                        "error": "Unexpected response type",
-                        "message": "Expected entity list from world.query"
-                    }))
-                }
+        BrpPayload::Result(value) => match entity_data_from_query_result(&value) {
+            Some(entities) => entities,
+            None => {
+                return Ok(json!({
+                    "error": "Unexpected response type",
+                    "message": "Expected entity list from world.query"
+                }));
             }
-        }
+        },
         BrpPayload::Error(error) => {
             warn!("BRP returned error: {}", error.message);
             return Ok(json!({
@@ -241,9 +243,8 @@ async fn handle_detect(arguments: Value, brp_client: Arc<RwLock<BrpClient>>) -> 
             });
         }
         Some(Samples::Unverified(why)) => {
-            reply["game_instance_unverified"] = json!(format!(
-                "the samples held may be another game's: {why}"
-            ));
+            reply["game_instance_unverified"] =
+                json!(format!("the samples held may be another game's: {why}"));
         }
         None => {}
     }
@@ -253,7 +254,11 @@ async fn handle_detect(arguments: Value, brp_client: Arc<RwLock<BrpClient>>) -> 
 /// Say so when a detector read nothing: an empty `anomalies` list from it is not a clean result.
 /// `entities_read` counts what the query returned, not what any detector could use of it.
 fn coverage_note(coverage: &[DetectorCoverage]) -> Option<String> {
-    let unevaluated: Vec<&str> = coverage.iter().filter(|c| c.evaluated == 0).map(|c| c.detector).collect();
+    let unevaluated: Vec<&str> = coverage
+        .iter()
+        .filter(|c| c.evaluated == 0)
+        .map(|c| c.detector)
+        .collect();
     if unevaluated.is_empty() {
         None
     } else if unevaluated.len() == coverage.len() {
@@ -427,8 +432,14 @@ mod tests {
         let second = handle_configure(json!({"entity_growth_threshold": 42.0}))
             .await
             .unwrap();
-        assert_eq!(second["config"]["entity_growth_threshold"], 42.0, "{second}");
-        assert_eq!(second["config"]["min_samples"], 37, "reset to default: {second}");
+        assert_eq!(
+            second["config"]["entity_growth_threshold"], 42.0,
+            "{second}"
+        );
+        assert_eq!(
+            second["config"]["min_samples"], 37,
+            "reset to default: {second}"
+        );
         let status = handle_status().await.unwrap();
         assert_eq!(status["config"]["min_samples"], 37, "{status}");
     }
@@ -438,7 +449,10 @@ mod tests {
         for bad in [json!("50"), json!(-1), json!(0), json!(true)] {
             let r = handle_configure(json!({"window_size": bad})).await.unwrap();
             assert_eq!(r["error"], "Invalid configuration", "{bad}: {r}");
-            assert!(r["message"].as_str().unwrap().contains("window_size"), "{r}");
+            assert!(
+                r["message"].as_str().unwrap().contains("window_size"),
+                "{r}"
+            );
         }
     }
 
@@ -463,25 +477,38 @@ mod tests {
             // it spikes; one has health 0 and is marked alive.
             let speed = if round == 7 { 1000.0 } else { 10.0 };
             let mut entities: Vec<EntityData> = (0..round * 5)
-                .map(|id| EntityData { id: 100 + id, components: Default::default() })
+                .map(|id| EntityData {
+                    id: 100 + id,
+                    components: Default::default(),
+                })
                 .collect();
             entities.push(EntityData {
                 id: 1,
-                components: [("Velocity".to_string(), json!({"linear": {"x": speed, "y": 0.0, "z": 0.0}}))]
-                    .into_iter()
-                    .collect(),
+                components: [(
+                    "Velocity".to_string(),
+                    json!({"linear": {"x": speed, "y": 0.0, "z": 0.0}}),
+                )]
+                .into_iter()
+                .collect(),
             });
             entities.push(EntityData {
                 id: 2,
-                components: [("Health".to_string(), json!({"current": 0.0})), ("Alive".to_string(), json!(true))]
-                    .into_iter()
-                    .collect(),
+                components: [
+                    ("Health".to_string(), json!({"current": 0.0})),
+                    ("Alive".to_string(), json!(true)),
+                ]
+                .into_iter()
+                .collect(),
             });
             for anomaly in system.detect_anomalies(&entities).unwrap() {
                 emitted.insert(format!("{:?}", anomaly.anomaly_type));
             }
         }
-        assert_eq!(emitted.len(), 3, "the driven data should trigger every detector: {emitted:?}");
+        assert_eq!(
+            emitted.len(),
+            3,
+            "the driven data should trigger every detector: {emitted:?}"
+        );
 
         let status = handle_status().await.unwrap();
         let listed: BTreeSet<String> = status["supported_anomaly_types"]
@@ -490,7 +517,10 @@ mod tests {
             .iter()
             .map(|t| t.as_str().expect("a type is a string").to_string())
             .collect();
-        assert_eq!(listed, emitted, "status must list what the detectors can report");
+        assert_eq!(
+            listed, emitted,
+            "status must list what the detectors can report"
+        );
     }
 
     #[tokio::test]
@@ -505,12 +535,20 @@ mod tests {
     /// answer "Configuration updated successfully" for it.
     #[test]
     fn a_window_smaller_than_the_samples_a_detector_needs_is_refused() {
-        let config = |window_size, min_samples| AnomalyConfig { window_size, min_samples, ..Default::default() };
+        let config = |window_size, min_samples| AnomalyConfig {
+            window_size,
+            min_samples,
+            ..Default::default()
+        };
         assert!(check_window_holds_min_samples(&config(10, 10)).is_ok());
         assert!(check_window_holds_min_samples(&config(2, 1)).is_ok());
         for (window, min) in [(5, 10), (9, 10), (1, 1), (0, 1)] {
-            let message = check_window_holds_min_samples(&config(window, min)).expect_err("a window that cannot hold the samples");
-            assert!(message.contains("window_size") && message.contains("min_samples"), "{message}");
+            let message = check_window_holds_min_samples(&config(window, min))
+                .expect_err("a window that cannot hold the samples");
+            assert!(
+                message.contains("window_size") && message.contains("min_samples"),
+                "{message}"
+            );
         }
     }
 
@@ -518,10 +556,15 @@ mod tests {
     /// call configured because the same call names both.
     #[tokio::test]
     async fn configure_refuses_a_window_below_min_samples() {
-        let r = handle_configure(json!({"window_size": 5, "min_samples": 10})).await.unwrap();
+        let r = handle_configure(json!({"window_size": 5, "min_samples": 10}))
+            .await
+            .unwrap();
         assert_eq!(r["error"], "Invalid configuration", "{r}");
         let message = r["message"].as_str().unwrap();
-        assert!(message.contains("window_size (5)") && message.contains("min_samples is 10"), "{r}");
+        assert!(
+            message.contains("window_size (5)") && message.contains("min_samples is 10"),
+            "{r}"
+        );
     }
 
     /// `start_monitoring` used to set a flag, answer "Continuous monitoring started" and run
@@ -548,7 +591,9 @@ mod tests {
     #[tokio::test]
     async fn test_anomaly_detect_no_connection() {
         let config = Config::default();
-        let brp_client = Arc::new(RwLock::new(crate::server::brp_client::BrpClient::new(&config)));
+        let brp_client = Arc::new(RwLock::new(crate::server::brp_client::BrpClient::new(
+            &config,
+        )));
 
         let args = json!({"action": "detect"});
         let result = handle_detect(args, brp_client).await.unwrap();
@@ -559,6 +604,8 @@ mod tests {
 
     fn create_test_brp_client() -> Arc<RwLock<BrpClient>> {
         let config = Config::default();
-        Arc::new(RwLock::new(crate::server::brp_client::BrpClient::new(&config)))
+        Arc::new(RwLock::new(crate::server::brp_client::BrpClient::new(
+            &config,
+        )))
     }
 }

@@ -18,9 +18,9 @@ use std::collections::VecDeque;
 use bevy::prelude::*;
 use bevy::remote::builtin_methods::process_remote_query_request;
 use serde::Deserialize;
-use serde_json::{json, Number, Value};
+use serde_json::{Number, Value, json};
 
-use crate::plugin::commands::{add_builtin_command, DebugCommandInfo};
+use crate::plugin::commands::{DebugCommandInfo, add_builtin_command};
 use crate::plugin::ready::FrameTicks;
 
 const DEFAULT_FRAMES: usize = 120;
@@ -65,8 +65,12 @@ struct Sample {
 impl Sample {
     fn to_json(&self) -> Value {
         match &self.outcome {
-            Ok(result) => json!({ "frame": self.frame, "elapsed_s": self.elapsed_s, "result": result }),
-            Err(error) => json!({ "frame": self.frame, "elapsed_s": self.elapsed_s, "error": error }),
+            Ok(result) => {
+                json!({ "frame": self.frame, "elapsed_s": self.elapsed_s, "result": result })
+            }
+            Err(error) => {
+                json!({ "frame": self.frame, "elapsed_s": self.elapsed_s, "error": error })
+            }
         }
     }
 }
@@ -84,7 +88,8 @@ pub(crate) struct Ring {
 }
 
 pub(crate) fn register(app: &mut App) {
-    app.init_resource::<Ring>().add_systems(Last, record.after(crate::plugin::ready::tick_frames));
+    app.init_resource::<Ring>()
+        .add_systems(Last, record.after(crate::plugin::ready::tick_frames));
     add_builtin_command::<RingParams, _>(
         app,
         DebugCommandInfo::new(
@@ -112,11 +117,14 @@ fn same_value(sampled: &Value, wanted: &Value) -> bool {
     match (sampled, wanted) {
         (Value::Number(sampled), Value::Number(wanted)) => same_number(sampled, wanted),
         (Value::Array(sampled), Value::Array(wanted)) => {
-            sampled.len() == wanted.len() && sampled.iter().zip(wanted).all(|(s, w)| same_value(s, w))
+            sampled.len() == wanted.len()
+                && sampled.iter().zip(wanted).all(|(s, w)| same_value(s, w))
         }
         (Value::Object(sampled), Value::Object(wanted)) => {
             sampled.len() == wanted.len()
-                && wanted.iter().all(|(key, w)| sampled.get(key).is_some_and(|s| same_value(s, w)))
+                && wanted
+                    .iter()
+                    .all(|(key, w)| sampled.get(key).is_some_and(|s| same_value(s, w)))
         }
         _ => sampled == wanted,
     }
@@ -134,14 +142,19 @@ fn same_number(sampled: &Number, wanted: &Number) -> bool {
         (Some(sampled), Some(wanted)) => {
             sampled == wanted
                 || (f64::from(sampled as f32) == sampled
-                    && (sampled as f32).to_string().parse::<f64>().is_ok_and(|named| named == wanted))
+                    && (sampled as f32)
+                        .to_string()
+                        .parse::<f64>()
+                        .is_ok_and(|named| named == wanted))
         }
         _ => false,
     }
 }
 
 fn trigger_fires(trigger: &Trigger, result: &Value) -> bool {
-    result.pointer(&trigger.pointer).is_some_and(|sampled| same_value(sampled, &trigger.equals))
+    result
+        .pointer(&trigger.pointer)
+        .is_some_and(|sampled| same_value(sampled, &trigger.equals))
 }
 
 /// Runs the query once for this frame and pushes the sample.
@@ -171,7 +184,11 @@ fn record(world: &mut World) {
         (Ok(result), Some(trigger)) => trigger_fires(trigger, result),
         _ => false,
     };
-    ring.samples.push_back(Sample { frame, elapsed_s, outcome });
+    ring.samples.push_back(Sample {
+        frame,
+        elapsed_s,
+        outcome,
+    });
     while ring.samples.len() > ring.capacity {
         ring.samples.pop_front();
         ring.evicted += 1;
@@ -226,7 +243,8 @@ fn handle_ring(In(params): In<RingParams>, world: &mut World) -> Result<Value, S
                 }
             }
             // Refuse a query the game rejects now, with the game's own message, rather than record errors.
-            process_remote_query_request(In(Some(query.clone())), world).map_err(|e| format!("query refused by the game: {}", e.message))?;
+            process_remote_query_request(In(Some(query.clone())), world)
+                .map_err(|e| format!("query refused by the game: {}", e.message))?;
             *world.resource_mut::<Ring>() = Ring {
                 query: Some(query),
                 trigger: params.trigger,
@@ -238,7 +256,9 @@ fn handle_ring(In(params): In<RingParams>, world: &mut World) -> Result<Value, S
         Action::Stop => {
             let mut ring = world.resource_mut::<Ring>();
             if ring.query.is_none() {
-                return Err("no ring buffer has been started; call with action `start` first".to_string());
+                return Err(
+                    "no ring buffer has been started; call with action `start` first".to_string(),
+                );
             }
             if ring.recording {
                 ring.recording = false;
@@ -249,10 +269,19 @@ fn handle_ring(In(params): In<RingParams>, world: &mut World) -> Result<Value, S
         Action::Dump => {
             let ring = world.resource::<Ring>();
             if ring.query.is_none() {
-                return Err("no ring buffer has been started; call with action `start` first".to_string());
+                return Err(
+                    "no ring buffer has been started; call with action `start` first".to_string(),
+                );
             }
-            let skip = params.last.map_or(0, |n| ring.samples.len().saturating_sub(n));
-            let samples: Vec<Value> = ring.samples.iter().skip(skip).map(Sample::to_json).collect();
+            let skip = params
+                .last
+                .map_or(0, |n| ring.samples.len().saturating_sub(n));
+            let samples: Vec<Value> = ring
+                .samples
+                .iter()
+                .skip(skip)
+                .map(Sample::to_json)
+                .collect();
             let mut reply = describe(ring, now);
             reply["returned"] = json!(samples.len());
             reply["samples"] = Value::Array(samples);

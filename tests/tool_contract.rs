@@ -11,7 +11,7 @@
 
 use std::sync::{Arc, Mutex};
 
-use axum::{extract::State, routing::post, Json, Router};
+use axum::{Json, Router, extract::State, routing::post};
 use bevy_fairy::server::brp_client::BrpClient;
 use bevy_fairy::server::config::Config;
 use bevy_fairy::server::mcp_tools::{
@@ -21,7 +21,7 @@ use bevy_fairy::server::mcp_tools::{
 use rmcp::handler::server::tool::Parameters;
 use rmcp::model::CallToolResult;
 use serde::de::DeserializeOwned;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use tokio::net::TcpListener;
 use tokio::sync::RwLock;
 
@@ -36,7 +36,11 @@ type SharedGame = Arc<Mutex<FakeGame>>;
 async fn answer(State(game): State<SharedGame>, body: String) -> Json<Value> {
     let request: Value = serde_json::from_str(&body).expect("the client sends JSON");
     let id = request.get("id").cloned().unwrap_or(Value::Null);
-    let method = request.get("method").and_then(Value::as_str).unwrap_or_default().to_string();
+    let method = request
+        .get("method")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_string();
     let params = request.get("params").cloned().unwrap_or(Value::Null);
 
     {
@@ -59,7 +63,9 @@ async fn answer(State(game): State<SharedGame>, body: String) -> Json<Value> {
         ])),
         "world.get_components" => Ok(json!({"components": {}})),
         "world.list_components" => Ok(json!({"components": ["Transform", "Health"]})),
-        "world.spawn_entity" | "world.despawn_entity" | "world.insert_components"
+        "world.spawn_entity"
+        | "world.despawn_entity"
+        | "world.insert_components"
         | "world.remove_components" => Ok(json!({"entity": 1, "success": true})),
         other => Err((-32601, format!("method not found: {other}"))),
     };
@@ -73,7 +79,9 @@ async fn answer(State(game): State<SharedGame>, body: String) -> Json<Value> {
 }
 
 async fn start_fake_game(game: SharedGame) -> u16 {
-    let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind the fake game port");
+    let listener = TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("bind the fake game port");
     let port = listener.local_addr().expect("fake game address").port();
     let app = Router::new().route("/", post(answer)).with_state(game);
     tokio::spawn(async move {
@@ -117,7 +125,10 @@ async fn connect(tools: &BevyDebuggerTools) {
         .status(Parameters(bevy_fairy::server::mcp_tools::NoArgs {}))
         .await
         .expect("status returns a result");
-    assert!(!text_of(&result).contains("\"error\""), "the fake game should answer status");
+    assert!(
+        !text_of(&result).contains("\"error\""),
+        "the fake game should answer status"
+    );
 }
 
 /// The action a caller asks for must reach the handler. Before the fix the tool never sent an
@@ -214,7 +225,9 @@ async fn detect_anomaly_says_what_each_detector_could_read() {
     let text = text_of(&result);
     let value: Value = serde_json::from_str(&text).expect("the detection reply is JSON");
 
-    let detectors = value["detectors"].as_array().unwrap_or_else(|| panic!("no `detectors` list: {text}"));
+    let detectors = value["detectors"]
+        .as_array()
+        .unwrap_or_else(|| panic!("no `detectors` list: {text}"));
     let detector = |name: &str| {
         detectors
             .iter()
@@ -223,22 +236,41 @@ async fn detect_anomaly_says_what_each_detector_could_read() {
     };
     for name in ["PhysicsDetector", "ConsistencyDetector"] {
         let d = detector(name);
-        assert_eq!(d["examined"], 0, "{name} found nothing to read in this game: {text}");
+        assert_eq!(
+            d["examined"], 0,
+            "{name} found nothing to read in this game: {text}"
+        );
         assert_eq!(d["evaluated"], 0, "{name}: {text}");
         assert!(
-            d["status"].as_str().is_some_and(|s| s.starts_with("not evaluated")),
+            d["status"]
+                .as_str()
+                .is_some_and(|s| s.starts_with("not evaluated")),
             "{name} must say it did not evaluate: {text}"
         );
-        assert!(d["reads"].as_str().is_some_and(|s| !s.is_empty()), "{name} must say what it reads: {text}");
+        assert!(
+            d["reads"].as_str().is_some_and(|s| !s.is_empty()),
+            "{name} must say what it reads: {text}"
+        );
     }
     let performance = detector("PerformanceDetector");
-    assert_eq!(performance["examined"], 1, "it read the entity count once: {text}");
-    assert_eq!(performance["evaluated"], 0, "one sample is short of the ten it needs: {text}");
+    assert_eq!(
+        performance["examined"], 1,
+        "it read the entity count once: {text}"
+    );
+    assert_eq!(
+        performance["evaluated"], 0,
+        "one sample is short of the ten it needs: {text}"
+    );
 
     assert_eq!(value["summary"]["entities_read"], 2, "{text}");
-    assert!(value["summary"].get("entities_analyzed").is_none(), "that count claimed more than it measured: {text}");
     assert!(
-        value["note"].as_str().is_some_and(|n| n.contains("says nothing about the game")),
+        value["summary"].get("entities_analyzed").is_none(),
+        "that count claimed more than it measured: {text}"
+    );
+    assert!(
+        value["note"]
+            .as_str()
+            .is_some_and(|n| n.contains("says nothing about the game")),
         "an empty list from detectors that evaluated nothing must not read as clean: {text}"
     );
 }
@@ -248,9 +280,15 @@ async fn detect_anomaly_says_what_each_detector_could_read() {
 #[test]
 fn detect_anomaly_refuses_thresholds_no_detector_reads() {
     for field in ["iqr_multiplier", "performance_threshold"] {
-        let refused = serde_json::from_value::<AnomalyRequest>(json!({"action": "configure", field: 2.0}));
-        let message = refused.expect_err("a threshold nothing reads must be refused").to_string();
-        assert!(message.contains(field), "the refusal names `{field}`: {message}");
+        let refused =
+            serde_json::from_value::<AnomalyRequest>(json!({"action": "configure", field: 2.0}));
+        let message = refused
+            .expect_err("a threshold nothing reads must be refused")
+            .to_string();
+        assert!(
+            message.contains(field),
+            "the refusal names `{field}`: {message}"
+        );
     }
 }
 
@@ -265,7 +303,9 @@ async fn a_read_from_a_game_without_the_plugin_says_why_it_has_no_frame() {
     connect(&tools).await;
 
     let observed = tools
-        .observe(request::<ObserveRequest>(json!({"query": "list all entities"})))
+        .observe(request::<ObserveRequest>(
+            json!({"query": "list all entities"}),
+        ))
         .await
         .expect("observe returns a result");
     let detected = tools
@@ -274,10 +314,16 @@ async fn a_read_from_a_game_without_the_plugin_says_why_it_has_no_frame() {
         .expect("detect_anomaly returns a result");
     for (tool, result) in [("observe", observed), ("detect_anomaly", detected)] {
         let text = text_of(&result);
-        let value: Value = serde_json::from_str(&text).unwrap_or_else(|e| panic!("{tool} returned non-JSON ({e}): {text}"));
-        assert!(value.get("frame").is_none() && value.get("frame_until").is_none(), "{tool} invented a frame: {text}");
+        let value: Value = serde_json::from_str(&text)
+            .unwrap_or_else(|e| panic!("{tool} returned non-JSON ({e}): {text}"));
         assert!(
-            value["frame_unavailable"].as_str().is_some_and(|why| why.contains("bevy_fairy/status")),
+            value.get("frame").is_none() && value.get("frame_until").is_none(),
+            "{tool} invented a frame: {text}"
+        );
+        assert!(
+            value["frame_unavailable"]
+                .as_str()
+                .is_some_and(|why| why.contains("bevy_fairy/status")),
             "{tool} must say why it has no frame: {text}"
         );
     }
@@ -333,7 +379,10 @@ async fn every_advertised_variation_type_runs() {
         .filter_map(|v| v.as_str().map(String::from))
         .collect();
     for needed in ["none", "random", "grid", "boundary", "fuzz"] {
-        assert!(advertised.iter().any(|a| a == needed), "{needed} missing from {advertised:?}");
+        assert!(
+            advertised.iter().any(|a| a == needed),
+            "{needed} missing from {advertised:?}"
+        );
     }
 
     let game: SharedGame = Arc::new(Mutex::new(FakeGame::default()));
@@ -377,7 +426,10 @@ async fn an_unknown_action_is_refused_with_the_valid_ones() {
 
     let text = text_of(&result);
     assert!(text.contains("Unknown action"), "text: {text}");
-    assert!(text.contains("quick_test"), "the error should list the valid actions; text: {text}");
+    assert!(
+        text.contains("quick_test"),
+        "the error should list the valid actions; text: {text}"
+    );
     assert_eq!(
         result.is_error,
         Some(true),
@@ -396,15 +448,21 @@ async fn an_unparseable_observe_query_comes_back_as_a_tool_error() {
     connect(&tools).await;
 
     let result = tools
-        .observe(request::<bevy_fairy::server::mcp_tools::ObserveRequest>(json!({
-            "query": "teleport the moon to mars",
-        })))
+        .observe(request::<bevy_fairy::server::mcp_tools::ObserveRequest>(
+            json!({
+                "query": "teleport the moon to mars",
+            }),
+        ))
         .await
         .expect("observe returns a result");
 
     let text = text_of(&result);
     assert!(text.contains("Query parsing failed"), "text: {text}");
-    assert_eq!(result.is_error, Some(true), "the refusal must set isError; text: {text}");
+    assert_eq!(
+        result.is_error,
+        Some(true),
+        "the refusal must set isError; text: {text}"
+    );
 }
 
 /// A game that answered did answer, even when this server cannot read the reply. `brp` used to
@@ -417,17 +475,26 @@ async fn an_unreadable_answer_is_not_reported_as_no_game() {
     let tools = tools_for(port);
 
     let result = tools
-        .brp(request::<BrpCallRequest>(json!({"method": "fake.unreadable"})))
+        .brp(request::<BrpCallRequest>(
+            json!({"method": "fake.unreadable"}),
+        ))
         .await
         .expect("brp returns a result");
 
     let text = text_of(&result);
-    assert_eq!(result.is_error, Some(true), "an unreadable answer is a failed call; text: {text}");
+    assert_eq!(
+        result.is_error,
+        Some(true),
+        "an unreadable answer is a failed call; text: {text}"
+    );
     assert!(
         !text.contains("no game answering"),
         "the fake game answered, so the error must not say nothing did; text: {text}"
     );
-    assert!(text.contains("fake.unreadable"), "the error should name the method; text: {text}");
+    assert!(
+        text.contains("fake.unreadable"),
+        "the error should name the method; text: {text}"
+    );
 }
 
 /// A handler that returns `Err` (here `experiment execute` with no `actions`) is a failed call the
@@ -441,11 +508,16 @@ async fn a_handler_error_comes_back_as_a_tool_error_the_model_can_read() {
     connect(&tools).await;
 
     let result = tools
-        .experiment(request::<bevy_fairy::server::mcp_tools::ExperimentRequest>(json!({"action": "execute"})))
+        .experiment(request::<bevy_fairy::server::mcp_tools::ExperimentRequest>(
+            json!({"action": "execute"}),
+        ))
         .await
         .expect("a handler error is a tool result, not a protocol error");
 
     let text = text_of(&result);
     assert_eq!(result.is_error, Some(true), "text: {text}");
-    assert!(text.contains("actions"), "the error should name the missing parameter; text: {text}");
+    assert!(
+        text.contains("actions"),
+        "the error should name the missing parameter; text: {text}"
+    );
 }

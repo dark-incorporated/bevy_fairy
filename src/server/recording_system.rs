@@ -1,6 +1,6 @@
+use flate2::Compression;
 use flate2::read::GzDecoder;
 use flate2::write::GzEncoder;
-use flate2::Compression;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, VecDeque};
@@ -357,14 +357,15 @@ impl RecordingBuffer {
         };
         let response = brp_client.send_request(&request).await?;
         let entities = match response.payload {
-            crate::server::brp::BrpPayload::Result(value) => crate::server::brp::entity_data_from_query_result(&value)
-                .ok_or_else(|| {
+            crate::server::brp::BrpPayload::Result(value) => {
+                crate::server::brp::entity_data_from_query_result(&value).ok_or_else(|| {
                     Error::Validation(
                         "the game answered world.query with a shape this server cannot read an \
                          entity list from"
                             .to_string(),
                     )
-                })?,
+                })?
+            }
             crate::server::brp::BrpPayload::Error(error) => {
                 return Err(Error::Brp(error.message));
             }

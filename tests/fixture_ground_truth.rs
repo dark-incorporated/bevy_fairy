@@ -14,12 +14,13 @@ use std::time::{Duration, Instant};
 use bevy_fairy::server::brp_client::BrpClient;
 use bevy_fairy::server::config::Config;
 use bevy_fairy::server::mcp_tools::{
-    BevyDebuggerTools, BrpCallRequest, GuideRequest, NoArgs, ObserveRequest, ScreenshotRequest, WatchRequest,
+    BevyDebuggerTools, BrpCallRequest, GuideRequest, NoArgs, ObserveRequest, ScreenshotRequest,
+    WatchRequest,
 };
 use fixture_game::{CRATE_WEIGHTS, SCORE_POINTS};
 use rmcp::handler::server::tool::Parameters;
 use rmcp::model::CallToolResult;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use tokio::sync::RwLock;
 
 /// A port that was free a moment ago. The listener is dropped before the fixture binds, so two
@@ -64,7 +65,10 @@ fn text_of(result: &CallToolResult) -> String {
 /// Call the `brp` tool the way an agent does, and parse the JSON it returns.
 async fn brp(tools: &BevyDebuggerTools, request: Value) -> Value {
     let params: BrpCallRequest = serde_json::from_value(request).expect("the request deserialises");
-    let result = tools.brp(Parameters(params)).await.expect("the brp tool returns a result");
+    let result = tools
+        .brp(Parameters(params))
+        .await
+        .expect("the brp tool returns a result");
     let text = text_of(&result);
     assert_ne!(
         result.is_error,
@@ -80,7 +84,10 @@ async fn brp(tools: &BevyDebuggerTools, request: Value) -> Value {
 async fn wait_until_ready(tools: &BevyDebuggerTools) -> Value {
     let deadline = Instant::now() + Duration::from_secs(60);
     loop {
-        let result = tools.status(Parameters(NoArgs {})).await.expect("status returns a result");
+        let result = tools
+            .status(Parameters(NoArgs {}))
+            .await
+            .expect("status returns a result");
         let text = text_of(&result);
         if result.is_error != Some(true) {
             if let Ok(status) = serde_json::from_str::<Value>(&text) {
@@ -115,7 +122,9 @@ async fn brp_query_returns_exactly_the_crates_the_fixture_spawned() {
         }),
     )
     .await;
-    let rows = rows.as_array().expect("world.query returns an array of rows");
+    let rows = rows
+        .as_array()
+        .expect("world.query returns an array of rows");
 
     let mut weights: Vec<f64> = rows
         .iter()
@@ -170,7 +179,9 @@ async fn rows_of(tools: &BevyDebuggerTools, component: &str) -> Vec<Value> {
         json!({"method": "world.query", "params": {"data": {"components": [component]}}}),
     )
     .await;
-    rows.as_array().expect("world.query returns an array of rows").clone()
+    rows.as_array()
+        .expect("world.query returns an array of rows")
+        .clone()
 }
 
 /// The planted bug is real, and the tool shows it: once the spinner has run more than
@@ -190,15 +201,22 @@ async fn the_planted_spinner_bug_is_visible_through_the_brp_tool() {
         let rows = rows_of(&tools, "fixture_game::Spinner").await;
         assert_eq!(rows.len(), 1, "the fixture spawns one spinner: {rows:?}");
         let spinner = rows[0]["components"]["fixture_game::Spinner"].clone();
-        let frames = spinner["frames"].as_u64().expect("the spinner reports its frames");
+        let frames = spinner["frames"]
+            .as_u64()
+            .expect("the spinner reports its frames");
         if frames > u64::from(SPINNER_STOPS_AFTER_FRAMES) + 10 {
             break spinner;
         }
-        assert!(Instant::now() < deadline, "the spinner never passed its stop frame");
+        assert!(
+            Instant::now() < deadline,
+            "the spinner never passed its stop frame"
+        );
         tokio::time::sleep(Duration::from_millis(200)).await;
     };
 
-    let angle = spinner["angle"].as_f64().expect("the spinner reports its angle");
+    let angle = spinner["angle"]
+        .as_f64()
+        .expect("the spinner reports its angle");
     let frozen = f64::from(SPINNER_STEP) * f64::from(SPINNER_STOPS_AFTER_FRAMES);
     assert!(
         (angle - frozen).abs() < 1e-3,
@@ -230,7 +248,10 @@ async fn status_reports_a_frame_count_that_advances() {
     let tools = tools_for(port);
     let first = wait_until_ready(&tools).await;
     tokio::time::sleep(Duration::from_millis(500)).await;
-    let result = tools.status(Parameters(NoArgs {})).await.expect("status returns a result");
+    let result = tools
+        .status(Parameters(NoArgs {}))
+        .await
+        .expect("status returns a result");
     let second: Value = serde_json::from_str(&text_of(&result)).expect("status returns JSON");
 
     assert!(
@@ -263,9 +284,21 @@ async fn the_mover_travels_at_no_more_than_its_speed() {
         }
     });
     let started = Instant::now();
-    let first = x_now(brp(&tools, request.clone()).await.as_array().cloned().unwrap_or_default());
+    let first = x_now(
+        brp(&tools, request.clone())
+            .await
+            .as_array()
+            .cloned()
+            .unwrap_or_default(),
+    );
     tokio::time::sleep(Duration::from_millis(500)).await;
-    let second = x_now(brp(&tools, request).await.as_array().cloned().unwrap_or_default());
+    let second = x_now(
+        brp(&tools, request)
+            .await
+            .as_array()
+            .cloned()
+            .unwrap_or_default(),
+    );
     let elapsed = started.elapsed().as_secs_f64();
 
     let travelled = second - first;
@@ -372,13 +405,18 @@ const SPINNER_FRAMES: &str = "/0/components/fixture_game::Spinner/frames";
 
 /// Call `watch` the way an agent does and parse its JSON.
 async fn watch(tools: &BevyDebuggerTools, request: Value) -> Result<Value, String> {
-    let params: WatchRequest = serde_json::from_value(request).map_err(|e| format!("schema: {e}"))?;
-    let result = tools.watch(Parameters(params)).await.expect("watch returns a result");
+    let params: WatchRequest =
+        serde_json::from_value(request).map_err(|e| format!("schema: {e}"))?;
+    let result = tools
+        .watch(Parameters(params))
+        .await
+        .expect("watch returns a result");
     let text = text_of(&result);
     if result.is_error == Some(true) {
         return Err(text);
     }
-    Ok(serde_json::from_str(&text).unwrap_or_else(|e| panic!("watch returned non-JSON ({e}): {text}")))
+    Ok(serde_json::from_str(&text)
+        .unwrap_or_else(|e| panic!("watch returned non-JSON ({e}): {text}")))
 }
 
 fn spinner_query() -> Value {
@@ -412,7 +450,10 @@ async fn watch_reports_where_the_planted_spinner_bug_stops_the_angle() {
     let frozen = f64::from(SPINNER_STEP) * f64::from(SPINNER_STOPS_AFTER_FRAMES);
     let samples = report["samples"].as_array().expect("samples");
     let last = samples.last().expect("at least one sample");
-    assert!((last["value"].as_f64().unwrap() - frozen).abs() < 1e-3, "frozen angle is {frozen}: {report}");
+    assert!(
+        (last["value"].as_f64().unwrap() - frozen).abs() < 1e-3,
+        "frozen angle is {frozen}: {report}"
+    );
     assert!(report["distinct_values"].as_u64().unwrap() >= 1);
     // The sample at which the angle froze is a frame at or after the frame the fixture stops on.
     let since = report["constant_since_frame"].as_u64().unwrap();
@@ -459,11 +500,17 @@ async fn watch_without_a_pointer_says_which_spinner_field_froze() {
 
     // The whole component still changes at the last sample, because the counter runs.
     assert_eq!(report["changed"], json!(true), "{report}");
-    assert!(report["constant_since_frame"].is_null(), "the whole value never settles: {report}");
+    assert!(
+        report["constant_since_frame"].is_null(),
+        "the whole value never settles: {report}"
+    );
 
     let counter = field(&report, SPINNER_FRAMES);
     assert_eq!(counter["changed"], json!(true), "{report}");
-    assert!(counter["constant_since_frame"].is_null(), "the counter is still counting: {report}");
+    assert!(
+        counter["constant_since_frame"].is_null(),
+        "the counter is still counting: {report}"
+    );
 
     let angle = field(&report, SPINNER_ANGLE);
     let since = angle["constant_since_frame"].as_u64().unwrap();
@@ -474,13 +521,25 @@ async fn watch_without_a_pointer_says_which_spinner_field_froze() {
     if angle["changed"] == json!(true) {
         // The window saw the angle turn and then stop: the frame it stopped on is the one the
         // fixture stops on, to within the frames one 200 ms interval spans.
-        assert!(since <= u64::from(SPINNER_STOPS_AFTER_FRAMES) + 40, "froze at frame {since}: {report}");
+        assert!(
+            since <= u64::from(SPINNER_STOPS_AFTER_FRAMES) + 40,
+            "froze at frame {since}: {report}"
+        );
         // A field that moved and then stopped is listed ahead of the one still counting.
-        assert_eq!(report["fields"][0]["pointer"], json!(SPINNER_ANGLE), "{report}");
+        assert_eq!(
+            report["fields"][0]["pointer"],
+            json!(SPINNER_ANGLE),
+            "{report}"
+        );
     }
 
     // Fields that changed are listed before fields that did not: the entity id never changes.
-    let listed: Vec<&str> = report["fields"].as_array().unwrap().iter().map(|f| f["pointer"].as_str().unwrap()).collect();
+    let listed: Vec<&str> = report["fields"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|f| f["pointer"].as_str().unwrap())
+        .collect();
     assert_eq!(listed.last(), Some(&"/0/entity"), "{listed:?}");
     assert_eq!(report["fields"].as_array().unwrap().len(), 3, "{report}");
     assert!(report.get("fields_omitted").is_none(), "{report}");
@@ -500,20 +559,38 @@ async fn watch_field_pointers_are_into_the_whole_result_and_can_be_passed_back()
     )
     .await
     .expect("watch succeeds against the fixture");
-    let pointers: Vec<&str> = report["fields"].as_array().expect("fields").iter().map(|f| f["pointer"].as_str().unwrap()).collect();
+    let pointers: Vec<&str> = report["fields"]
+        .as_array()
+        .expect("fields")
+        .iter()
+        .map(|f| f["pointer"].as_str().unwrap())
+        .collect();
     assert_eq!(pointers.len(), 2, "{report}");
-    assert!(pointers.contains(&SPINNER_ANGLE) && pointers.contains(&SPINNER_FRAMES), "{pointers:?}");
+    assert!(
+        pointers.contains(&SPINNER_ANGLE) && pointers.contains(&SPINNER_FRAMES),
+        "{pointers:?}"
+    );
 
     // Hand one of the listed pointers back, as an agent narrowing its watch would.
-    let counter = pointers.iter().find(|p| **p == SPINNER_FRAMES).expect("listed");
+    let counter = pointers
+        .iter()
+        .find(|p| **p == SPINNER_FRAMES)
+        .expect("listed");
     let again = watch(
         &tools,
         json!({"method": "world.query", "params": spinner_query(), "pointer": counter, "samples": 3, "interval_ms": 100}),
     )
     .await
     .expect("a field's pointer is accepted as `pointer`");
-    assert_eq!(again["changed"], json!(true), "the frame counter moves: {again}");
-    assert!(again.get("fields").is_none(), "a lone value has no breakdown: {again}");
+    assert_eq!(
+        again["changed"],
+        json!(true),
+        "the frame counter moves: {again}"
+    );
+    assert!(
+        again.get("fields").is_none(),
+        "a lone value has no breakdown: {again}"
+    );
 }
 
 /// A result with more values than `fields` lists is cut, and says how many it left out: a
@@ -532,9 +609,14 @@ async fn watch_caps_a_long_fields_list_and_counts_what_it_left_out() {
     .expect("watch succeeds against the fixture");
     let listed = report["fields"].as_array().expect("fields").len();
     assert_eq!(listed, 40, "{listed} fields listed");
-    let left_out = report["fields_omitted"].as_u64().unwrap_or_else(|| panic!("a cut list says what it cut: {report}"));
+    let left_out = report["fields_omitted"]
+        .as_u64()
+        .unwrap_or_else(|| panic!("a cut list says what it cut: {report}"));
     // Every row holds an entity id and an empty `components`, so the rows number half the values.
-    let rows = report["samples"][0]["value"].as_array().expect("rows").len() as u64;
+    let rows = report["samples"][0]["value"]
+        .as_array()
+        .expect("rows")
+        .len() as u64;
     assert_eq!(left_out + 40, rows * 2, "{report}");
 }
 
@@ -552,14 +634,26 @@ async fn watch_says_a_value_that_never_moves_never_changed() {
         if let Some(pointer) = pointer {
             request["pointer"] = json!(pointer);
         }
-        let report = watch(&tools, request).await.expect("watch succeeds against the fixture");
+        let report = watch(&tools, request)
+            .await
+            .expect("watch succeeds against the fixture");
         assert_eq!(report["changed"], json!(false), "{report}");
         assert_eq!(report["distinct_values"], json!(1), "{report}");
         assert!(report["first_change_frame"].is_null(), "{report}");
-        assert_eq!(report["constant_since_frame"], report["samples"][0]["frame"], "{report}");
-        assert!(report.get("fields").is_none(), "one number has no breakdown: {report}");
+        assert_eq!(
+            report["constant_since_frame"], report["samples"][0]["frame"],
+            "{report}"
+        );
+        assert!(
+            report.get("fields").is_none(),
+            "one number has no breakdown: {report}"
+        );
         let last = &report["samples"][3]["value"];
-        let points = if pointer.is_some() { last } else { &last["value"]["points"] };
+        let points = if pointer.is_some() {
+            last
+        } else {
+            &last["value"]["points"]
+        };
         assert_eq!(points.as_u64(), Some(u64::from(SCORE_POINTS)), "{report}");
     }
 }
@@ -588,15 +682,27 @@ async fn watch_brackets_the_frame_every_sample_was_read_on() {
     let mut lowest = i64::MIN;
     let mut highest = i64::MAX;
     for s in samples {
-        let (from, until) = (s["frame"].as_i64().unwrap(), s["frame_until"].as_i64().unwrap());
+        let (from, until) = (
+            s["frame"].as_i64().unwrap(),
+            s["frame_until"].as_i64().unwrap(),
+        );
         let value = s["value"].as_i64().unwrap();
         assert!(from <= until, "bracket reversed: {s}");
         lowest = lowest.max(value - until);
         highest = highest.min(value - from);
     }
-    assert!(lowest <= highest, "no constant offset fits every bracket ({lowest} > {highest}): {report}");
-    let frames: Vec<u64> = samples.iter().map(|s| s["frame"].as_u64().unwrap()).collect();
-    assert!(frames.windows(2).all(|w| w[0] < w[1]), "frames must increase: {frames:?}");
+    assert!(
+        lowest <= highest,
+        "no constant offset fits every bracket ({lowest} > {highest}): {report}"
+    );
+    let frames: Vec<u64> = samples
+        .iter()
+        .map(|s| s["frame"].as_u64().unwrap())
+        .collect();
+    assert!(
+        frames.windows(2).all(|w| w[0] < w[1]),
+        "frames must increase: {frames:?}"
+    );
     assert_eq!(report["changed"], json!(true));
 }
 
@@ -613,17 +719,33 @@ async fn watch_refuses_what_it_cannot_measure() {
     )
     .await
     .expect_err("a pointer matching nothing is an error");
-    assert!(miss.contains("/0/components/nope"), "names the pointer: {miss}");
+    assert!(
+        miss.contains("/0/components/nope"),
+        "names the pointer: {miss}"
+    );
 
-    let stream = watch(&tools, json!({"method": "world.get_components+watch"})).await.expect_err("refused");
-    assert!(stream.contains("world.get_components"), "names the one-shot method: {stream}");
-
-    let few = watch(&tools, json!({"method": "world.query", "samples": 1})).await.expect_err("refused");
-    assert!(few.contains("2") && few.contains("100"), "states the valid range: {few}");
-
-    let long = watch(&tools, json!({"method": "world.query", "samples": 100, "interval_ms": 5000}))
+    let stream = watch(&tools, json!({"method": "world.get_components+watch"}))
         .await
         .expect_err("refused");
+    assert!(
+        stream.contains("world.get_components"),
+        "names the one-shot method: {stream}"
+    );
+
+    let few = watch(&tools, json!({"method": "world.query", "samples": 1}))
+        .await
+        .expect_err("refused");
+    assert!(
+        few.contains("2") && few.contains("100"),
+        "states the valid range: {few}"
+    );
+
+    let long = watch(
+        &tools,
+        json!({"method": "world.query", "samples": 100, "interval_ms": 5000}),
+    )
+    .await
+    .expect_err("refused");
     assert!(long.contains("30"), "states the time cap: {long}");
 }
 
@@ -645,7 +767,9 @@ async fn the_params_examples_in_the_brp_schema_are_accepted_by_the_game() {
         let line = format!("`{item}");
         let mut spans = line.split('`').skip(1).step_by(2);
         let Some(method) = spans.next() else { continue };
-        let Some(json_span) = spans.next().filter(|s| s.starts_with('{')) else { continue };
+        let Some(json_span) = spans.next().filter(|s| s.starts_with('{')) else {
+            continue;
+        };
         if json_span.contains("entity") {
             continue;
         }
@@ -670,8 +794,14 @@ async fn the_params_examples_in_the_brp_schema_are_accepted_by_the_game() {
 
 /// Call `observe` the way an agent does and return the raw text and the error flag.
 async fn observe(tools: &BevyDebuggerTools, query: &str) -> (String, bool) {
-    let request = ObserveRequest { query: query.to_string(), diff: false };
-    let result = tools.observe(Parameters(request)).await.expect("observe returns a result");
+    let request = ObserveRequest {
+        query: query.to_string(),
+        diff: false,
+    };
+    let result = tools
+        .observe(Parameters(request))
+        .await
+        .expect("observe returns a result");
     (text_of(&result), result.is_error == Some(true))
 }
 
@@ -686,7 +816,8 @@ async fn observe_reads_the_live_game_every_time_it_is_asked() {
 
     let query = "find entities with component bevy_transform::components::transform::Transform, fixture_game::Mover";
     let x_of = |text: &str| -> f64 {
-        let value: Value = serde_json::from_str(text).unwrap_or_else(|e| panic!("observe returned non-JSON ({e}): {text}"));
+        let value: Value = serde_json::from_str(text)
+            .unwrap_or_else(|e| panic!("observe returned non-JSON ({e}): {text}"));
         value["result"][0]["components"]["bevy_transform::components::transform::Transform"]["translation"][0]
             .as_f64()
             .unwrap_or_else(|| panic!("no mover x in: {text}"))
@@ -714,9 +845,18 @@ async fn observe_refuses_a_component_name_the_game_does_not_register() {
     wait_until_ready(&tools).await;
 
     let (text, failed) = observe(&tools, "find entities with component Crate").await;
-    assert!(failed, "an unregistered component must be an error, got: {text}");
-    assert!(text.contains("Crate"), "the error names the bad type: {text}");
-    assert!(text.contains("fixture_game::Crate"), "the error offers the registered path: {text}");
+    assert!(
+        failed,
+        "an unregistered component must be an error, got: {text}"
+    );
+    assert!(
+        text.contains("Crate"),
+        "the error names the bad type: {text}"
+    );
+    assert!(
+        text.contains("fixture_game::Crate"),
+        "the error offers the registered path: {text}"
+    );
 
     let (text, failed) = observe(&tools, "find entities with component fixture_game::Crate").await;
     assert!(!failed, "the registered path is accepted: {text}");
@@ -733,8 +873,12 @@ async fn observe_names_a_registered_component_whose_path_has_a_digit() {
     let tools = tools_for(port);
     wait_until_ready(&tools).await;
     let rows_of = |text: &str| -> usize {
-        let reply: Value = serde_json::from_str(text).unwrap_or_else(|e| panic!("observe returned non-JSON ({e}): {text}"));
-        reply["result"].as_array().unwrap_or_else(|| panic!("no rows in: {reply}")).len()
+        let reply: Value = serde_json::from_str(text)
+            .unwrap_or_else(|e| panic!("observe returned non-JSON ({e}): {text}"));
+        reply["result"]
+            .as_array()
+            .unwrap_or_else(|| panic!("no rows in: {reply}"))
+            .len()
     };
 
     let mesh3d = "bevy_mesh::components::Mesh3d";
@@ -744,12 +888,21 @@ async fn observe_names_a_registered_component_whose_path_has_a_digit() {
 
     let (all, failed) = observe(&tools, "list all entities").await;
     assert!(!failed, "{all}");
-    let (without, failed) = observe(&tools, &format!("find entities without component {mesh3d}")).await;
+    let (without, failed) =
+        observe(&tools, &format!("find entities without component {mesh3d}")).await;
     assert!(!failed, "{without}");
-    assert_eq!(rows_of(&without), rows_of(&all), "every entity lacks a Mesh3d: {without}");
+    assert_eq!(
+        rows_of(&without),
+        rows_of(&all),
+        "every entity lacks a Mesh3d: {without}"
+    );
 
     // A generic path: `Time<Real>` is one resource, so exactly one entity holds it.
-    let (text, failed) = observe(&tools, "find entities with component bevy_time::time::Time<bevy_time::real::Real>").await;
+    let (text, failed) = observe(
+        &tools,
+        "find entities with component bevy_time::time::Time<bevy_time::real::Real>",
+    )
+    .await;
     assert!(!failed, "a registered generic path must parse: {text}");
     assert_eq!(rows_of(&text), 1, "one `Time<Real>` resource: {text}");
 }
@@ -763,21 +916,41 @@ async fn observe_find_n_entities_returns_n_and_says_how_many_matched() {
     let tools = tools_for(port);
     wait_until_ready(&tools).await;
 
-    let (text, failed) = observe(&tools, "find 2 entities with component fixture_game::Crate").await;
+    let (text, failed) =
+        observe(&tools, "find 2 entities with component fixture_game::Crate").await;
     assert!(!failed, "{text}");
-    let reply: Value = serde_json::from_str(&text).unwrap_or_else(|e| panic!("observe returned non-JSON ({e}): {text}"));
-    let rows = reply["result"].as_array().unwrap_or_else(|| panic!("no rows in: {reply}"));
+    let reply: Value = serde_json::from_str(&text)
+        .unwrap_or_else(|e| panic!("observe returned non-JSON ({e}): {text}"));
+    let rows = reply["result"]
+        .as_array()
+        .unwrap_or_else(|| panic!("no rows in: {reply}"));
     assert_eq!(rows.len(), 2, "two were asked for: {reply}");
-    assert!(rows.iter().all(|row| row["components"].get("fixture_game::Crate").is_some()), "{reply}");
+    assert!(
+        rows.iter()
+            .all(|row| row["components"].get("fixture_game::Crate").is_some()),
+        "{reply}"
+    );
     assert_eq!(reply["metadata"]["entity_count"], 2, "{reply}");
     assert_eq!(reply["metadata"]["limit"], 2, "{reply}");
-    assert_eq!(reply["metadata"]["matched"], CRATE_WEIGHTS.len(), "the fixture spawned every crate: {reply}");
+    assert_eq!(
+        reply["metadata"]["matched"],
+        CRATE_WEIGHTS.len(),
+        "the fixture spawned every crate: {reply}"
+    );
 
     // A limit above the match count cuts nothing.
-    let (text, failed) = observe(&tools, "find 50 entities with component fixture_game::Crate").await;
+    let (text, failed) = observe(
+        &tools,
+        "find 50 entities with component fixture_game::Crate",
+    )
+    .await;
     assert!(!failed, "{text}");
     let reply: Value = serde_json::from_str(&text).expect("observe answers JSON");
-    assert_eq!(reply["result"].as_array().map(Vec::len), Some(CRATE_WEIGHTS.len()), "{reply}");
+    assert_eq!(
+        reply["result"].as_array().map(Vec::len),
+        Some(CRATE_WEIGHTS.len()),
+        "{reply}"
+    );
     assert_eq!(reply["metadata"]["matched"], CRATE_WEIGHTS.len(), "{reply}");
 }
 
@@ -793,17 +966,35 @@ async fn observe_reports_no_type_information_it_did_not_read_from_the_game() {
     let tools = tools_for(port);
     wait_until_ready(&tools).await;
 
-    let arguments = json!({"query": "find entities with component fixture_game::Crate", "reflection": true});
+    let arguments =
+        json!({"query": "find entities with component fixture_game::Crate", "reflection": true});
     match serde_json::from_value::<ObserveRequest>(arguments) {
-        Err(refusal) => assert!(refusal.to_string().contains("reflection"), "the refusal names the field: {refusal}"),
+        Err(refusal) => assert!(
+            refusal.to_string().contains("reflection"),
+            "the refusal names the field: {refusal}"
+        ),
         Ok(request) => {
-            let result = tools.observe(Parameters(request)).await.expect("observe returns a result");
-            let reply: Value = serde_json::from_str(&text_of(&result)).expect("observe answers JSON");
+            let result = tools
+                .observe(Parameters(request))
+                .await
+                .expect("observe returns a result");
+            let reply: Value =
+                serde_json::from_str(&text_of(&result)).expect("observe answers JSON");
             // Compact, so the claims below are matched whatever the reply's layout.
-            let reflection = serde_json::to_string(&reply["result"]["reflection_data"]).expect("re-serialise");
-            assert!(!reflection.contains(r#""is_reflected":false"#), "Crate is a reflected component: {reflection}");
-            assert!(!reflection.contains(r#""type_category":"Value""#), "Crate is a struct: {reflection}");
-            assert!(!reflection.contains(r#""f64""#), "Crate.weight is an f32: {reflection}");
+            let reflection =
+                serde_json::to_string(&reply["result"]["reflection_data"]).expect("re-serialise");
+            assert!(
+                !reflection.contains(r#""is_reflected":false"#),
+                "Crate is a reflected component: {reflection}"
+            );
+            assert!(
+                !reflection.contains(r#""type_category":"Value""#),
+                "Crate is a struct: {reflection}"
+            );
+            assert!(
+                !reflection.contains(r#""f64""#),
+                "Crate.weight is an f32: {reflection}"
+            );
         }
     }
 }
@@ -812,8 +1003,11 @@ async fn observe_reports_no_type_information_it_did_not_read_from_the_game() {
 async fn mover_id(tools: &BevyDebuggerTools) -> u64 {
     let (text, failed) = observe(tools, "find entities with component fixture_game::Mover").await;
     assert!(!failed, "{text}");
-    let reply: Value = serde_json::from_str(&text).unwrap_or_else(|e| panic!("observe returned non-JSON ({e}): {text}"));
-    reply["result"][0]["entity"].as_u64().unwrap_or_else(|| panic!("no mover in: {text}"))
+    let reply: Value = serde_json::from_str(&text)
+        .unwrap_or_else(|e| panic!("observe returned non-JSON ({e}): {text}"));
+    reply["result"][0]["entity"]
+        .as_u64()
+        .unwrap_or_else(|| panic!("no mover in: {text}"))
 }
 
 /// `observe` keeps one process-wide "previous `diff` read", so the tests that diff take turns: a
@@ -822,11 +1016,18 @@ static OBSERVE_DIFF_TURN: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new
 
 /// Call `observe` with `diff: true`, as an agent does, and return the parsed reply.
 async fn observe_diff(tools: &BevyDebuggerTools, query: &str) -> Value {
-    let request = ObserveRequest { query: query.to_string(), diff: true };
-    let result = tools.observe(Parameters(request)).await.expect("observe returns a result");
+    let request = ObserveRequest {
+        query: query.to_string(),
+        diff: true,
+    };
+    let result = tools
+        .observe(Parameters(request))
+        .await
+        .expect("observe returns a result");
     let text = text_of(&result);
     assert!(result.is_error != Some(true), "{text}");
-    serde_json::from_str(&text).unwrap_or_else(|e| panic!("observe returned non-JSON ({e}): {text}"))
+    serde_json::from_str(&text)
+        .unwrap_or_else(|e| panic!("observe returned non-JSON ({e}): {text}"))
 }
 
 /// `diff: true` compares a read with the previous `diff: true` read. It compared each read with
@@ -845,30 +1046,53 @@ async fn observe_diff_reports_the_mover_moving_between_two_reads() {
     let transform = "bevy_transform::components::transform::Transform";
     let query = format!("show entity {mover} components {transform}");
     let first = observe_diff(&tools, &query).await;
-    assert_eq!(first["diff"]["baseline"], true, "the first diff read has nothing to compare with: {first}");
+    assert_eq!(
+        first["diff"]["baseline"], true,
+        "the first diff read has nothing to compare with: {first}"
+    );
     tokio::time::sleep(Duration::from_millis(500)).await;
     let second = observe_diff(&tools, &query).await;
 
-    let changes = second["diff"]["changes"].as_array().unwrap_or_else(|| panic!("no diff in: {second}"));
+    let changes = second["diff"]["changes"]
+        .as_array()
+        .unwrap_or_else(|| panic!("no diff in: {second}"));
     assert!(
-        changes.iter().any(|c| c["entity_id"] == mover && c["component_type"] == transform),
+        changes
+            .iter()
+            .any(|c| c["entity_id"] == mover && c["component_type"] == transform),
         "the mover moved {} between the reads, so its Transform changed: {second}",
         fixture_game::MOVER_SPEED * 0.5
     );
-    assert!(changes.iter().all(|c| c["entity_id"] == mover), "only the mover was read: {second}");
+    assert!(
+        changes.iter().all(|c| c["entity_id"] == mover),
+        "only the mover was read: {second}"
+    );
     // The summary counts what `changes` lists: one entity, the mover, had a component change. It
     // said `entities_modified: 0` beside `components_modified: 1`, because it counted only a change
     // kind the diff never produces (B-078).
     let summary = &second["diff"]["summary"];
-    assert_eq!(summary["entities_modified"], 1, "the mover is the one entity that changed: {second}");
-    assert_eq!(summary["components_modified"], changes.len(), "every change listed is a modified component: {second}");
+    assert_eq!(
+        summary["entities_modified"], 1,
+        "the mover is the one entity that changed: {second}"
+    );
+    assert_eq!(
+        summary["components_modified"],
+        changes.len(),
+        "every change listed is a modified component: {second}"
+    );
 
     // A read of another query covers other components, so it is not compared with this one: the
     // mover's Name and Mover are outside the Transform-only query, not removed from the game.
     for query in [format!("show entity {mover}"), query] {
         let switched = observe_diff(&tools, &query).await;
-        assert_eq!(switched["diff"]["baseline"], true, "a new query starts a new baseline: {switched}");
-        assert!(switched["diff"].get("changes").is_none(), "nothing is compared across queries: {switched}");
+        assert_eq!(
+            switched["diff"]["baseline"], true,
+            "a new query starts a new baseline: {switched}"
+        );
+        assert!(
+            switched["diff"].get("changes").is_none(),
+            "nothing is compared across queries: {switched}"
+        );
     }
 }
 
@@ -884,15 +1108,35 @@ async fn observe_diff_with_a_limit_reports_only_what_the_game_changed() {
     let query = "find 2 entities with component fixture_game::Crate";
     let first = observe_diff(&tools, query).await;
     assert_eq!(first["diff"]["baseline"], true, "{first}");
-    let shown = first["result"][0]["entity"].as_u64().unwrap_or_else(|| panic!("no crate row in: {first}"));
-    brp(&tools, json!({"method": "world.despawn_entity", "params": {"entity": shown}})).await;
+    let shown = first["result"][0]["entity"]
+        .as_u64()
+        .unwrap_or_else(|| panic!("no crate row in: {first}"));
+    brp(
+        &tools,
+        json!({"method": "world.despawn_entity", "params": {"entity": shown}}),
+    )
+    .await;
 
     let second = observe_diff(&tools, query).await;
     let summary = &second["diff"]["summary"];
-    assert_eq!(summary["entities_removed"], 1, "one crate was despawned: {second}");
-    assert_eq!(summary["entities_added"], 0, "no crate was spawned: {second}");
-    assert_eq!(second["metadata"]["matched"], CRATE_WEIGHTS.len() - 1, "{second}");
-    assert_eq!(second["result"].as_array().map(Vec::len), Some(2), "the rows are still cut to 2: {second}");
+    assert_eq!(
+        summary["entities_removed"], 1,
+        "one crate was despawned: {second}"
+    );
+    assert_eq!(
+        summary["entities_added"], 0,
+        "no crate was spawned: {second}"
+    );
+    assert_eq!(
+        second["metadata"]["matched"],
+        CRATE_WEIGHTS.len() - 1,
+        "{second}"
+    );
+    assert_eq!(
+        second["result"].as_array().map(Vec::len),
+        Some(2),
+        "the rows are still cut to 2: {second}"
+    );
 }
 
 /// `diff: true` compares a read with the previous read of the same query, and the server outlives
@@ -918,17 +1162,32 @@ async fn observe_diff_does_not_compare_a_read_with_one_of_another_game() {
         .as_u64()
         .expect("the game names the entity it spawned");
     let read = observe_diff(&after_restart, query).await;
-    assert_eq!(read["diff"]["baseline"], true, "the earlier read was of another game: {read}");
-    assert!(read["diff"].get("changes").is_none(), "nothing is compared across games: {read}");
+    assert_eq!(
+        read["diff"]["baseline"], true,
+        "the earlier read was of another game: {read}"
+    );
     assert!(
-        read["diff"]["message"].as_str().is_some_and(|m| m.contains("another game")),
+        read["diff"].get("changes").is_none(),
+        "nothing is compared across games: {read}"
+    );
+    assert!(
+        read["diff"]["message"]
+            .as_str()
+            .is_some_and(|m| m.contains("another game")),
         "the reply says why it is a baseline: {read}"
     );
 
     // Within the new game the next read is compared as usual.
-    brp(&after_restart, json!({"method": "world.despawn_entity", "params": {"entity": spawned}})).await;
+    brp(
+        &after_restart,
+        json!({"method": "world.despawn_entity", "params": {"entity": spawned}}),
+    )
+    .await;
     let next = observe_diff(&after_restart, query).await;
-    assert_eq!(next["diff"]["summary"]["entities_removed"], 1, "the crate the new game spawned was despawned: {next}");
+    assert_eq!(
+        next["diff"]["summary"]["entities_removed"], 1,
+        "the crate the new game spawned was despawned: {next}"
+    );
     assert!(next["diff"].get("baseline").is_none(), "{next}");
 }
 
@@ -944,24 +1203,40 @@ async fn observe_show_entity_lists_the_entitys_components() {
 
     let (text, failed) = observe(&tools, &format!("show entity {mover}")).await;
     assert!(!failed, "{text}");
-    let reply: Value = serde_json::from_str(&text).unwrap_or_else(|e| panic!("observe returned non-JSON ({e}): {text}"));
+    let reply: Value = serde_json::from_str(&text)
+        .unwrap_or_else(|e| panic!("observe returned non-JSON ({e}): {text}"));
     let components = &reply["result"]["components"];
-    assert!(components.get("fixture_game::Mover").is_some(), "the mover's own component: {text}");
     assert!(
-        components.get("bevy_transform::components::transform::Transform").is_some(),
+        components.get("fixture_game::Mover").is_some(),
+        "the mover's own component: {text}"
+    );
+    assert!(
+        components
+            .get("bevy_transform::components::transform::Transform")
+            .is_some(),
         "the mover's Transform: {text}"
     );
     // Every registered component is asked for, so the ones the mover lacks must not come back as
     // errors about the mover.
     let not_present = i64::from(bevy_remote::error_codes::COMPONENT_NOT_PRESENT);
-    let errors = reply["result"]["errors"].as_object().unwrap_or_else(|| panic!("no errors map: {text}"));
-    assert!(errors.values().all(|e| e["code"].as_i64() != Some(not_present)), "noise about absent components: {text}");
+    let errors = reply["result"]["errors"]
+        .as_object()
+        .unwrap_or_else(|| panic!("no errors map: {text}"));
+    assert!(
+        errors
+            .values()
+            .all(|e| e["code"].as_i64() != Some(not_present)),
+        "noise about absent components: {text}"
+    );
 
     // An entity the game does not have is an error, not an entity with nothing on it. The fixture
     // spawns a dozen entities; index 999999 is none of them.
     let absent = (1u64 << 32) | 999_999;
     let (text, failed) = observe(&tools, &format!("show entity {absent}")).await;
-    assert!(failed, "an entity the game does not have must be an error: {text}");
+    assert!(
+        failed,
+        "an entity the game does not have must be an error: {text}"
+    );
 }
 
 /// The semantic phrases claimed selections the server never made. Their value thresholds were
@@ -985,9 +1260,18 @@ async fn observe_refuses_the_semantic_phrases_it_never_evaluated() {
         "find stuck and fast entities",
     ] {
         let (text, failed) = observe(&tools, query).await;
-        assert!(failed, "`{query}` was never evaluated, so it cannot be answered: {text}");
-        assert!(!text.contains("semantic_analysis"), "`{query}` must not claim an analysis: {text}");
-        assert!(text.contains("find entities with component"), "the refusal lists the shapes that work: {text}");
+        assert!(
+            failed,
+            "`{query}` was never evaluated, so it cannot be answered: {text}"
+        );
+        assert!(
+            !text.contains("semantic_analysis"),
+            "`{query}` must not claim an analysis: {text}"
+        );
+        assert!(
+            text.contains("find entities with component"),
+            "the refusal lists the shapes that work: {text}"
+        );
     }
 }
 
@@ -1003,7 +1287,8 @@ async fn experiment(tools: &BevyDebuggerTools, request: Value) -> Value {
         .await
         .expect("the experiment tool returns a result");
     let text = text_of(&result);
-    serde_json::from_str(&text).unwrap_or_else(|e| panic!("experiment returned non-JSON ({e}): {text}"))
+    serde_json::from_str(&text)
+        .unwrap_or_else(|e| panic!("experiment returned non-JSON ({e}): {text}"))
 }
 
 /// The weight of every fixture crate, keyed by entity id.
@@ -1014,7 +1299,9 @@ async fn crate_weights(tools: &BevyDebuggerTools) -> std::collections::BTreeMap<
         .map(|row| {
             (
                 row["entity"].as_u64().expect("a row names its entity"),
-                row["components"]["fixture_game::Crate"]["weight"].as_f64().expect("a crate has a weight"),
+                row["components"]["fixture_game::Crate"]["weight"]
+                    .as_f64()
+                    .expect("a crate has a weight"),
             )
         })
         .collect()
@@ -1034,7 +1321,11 @@ async fn experiment_undo_restores_a_modified_component_when_it_claims_rollback()
 
     let before = crate_weights(&tools).await;
     let (&entity, &original) = before.iter().next().expect("the fixture spawns crates");
-    assert!(CRATE_WEIGHTS.iter().any(|w| (f64::from(*w) - original).abs() < 1e-9));
+    assert!(
+        CRATE_WEIGHTS
+            .iter()
+            .any(|w| (f64::from(*w) - original).abs() < 1e-9)
+    );
 
     let run = experiment(
         &tools,
@@ -1045,14 +1336,25 @@ async fn experiment_undo_restores_a_modified_component_when_it_claims_rollback()
     )
     .await;
     assert_eq!(run["results"][0]["success"], json!(true), "{run}");
-    assert_eq!(crate_weights(&tools).await[&entity], 99.0, "the modify must reach the game");
+    assert_eq!(
+        crate_weights(&tools).await[&entity],
+        99.0,
+        "the modify must reach the game"
+    );
     let claimed = run["results"][0]["rollback_available"] == json!(true);
-    assert!(claimed, "the crate's original weight was readable, so the modify is reversible: {run}");
+    assert!(
+        claimed,
+        "the crate's original weight was readable, so the modify is reversible: {run}"
+    );
 
     let undo = experiment(&tools, json!({"action": "undo"})).await;
     let restored = crate_weights(&tools).await[&entity];
     if claimed {
-        assert_eq!(undo["result"]["success"], json!(true), "rollback was claimed, undo said: {undo}");
+        assert_eq!(
+            undo["result"]["success"],
+            json!(true),
+            "rollback was claimed, undo said: {undo}"
+        );
         assert_eq!(restored, original, "undo must put the original weight back");
     } else {
         assert_eq!(undo["result"]["success"], json!(false), "{undo}");
@@ -1060,7 +1362,11 @@ async fn experiment_undo_restores_a_modified_component_when_it_claims_rollback()
 
     let history = experiment(&tools, json!({"action": "history"})).await;
     if !claimed {
-        assert_eq!(history["count"], json!(1), "a refused undo must not drop the entry: {history}");
+        assert_eq!(
+            history["count"],
+            json!(1),
+            "a refused undo must not drop the entry: {history}"
+        );
     }
 }
 
@@ -1074,10 +1380,21 @@ async fn experiment_delete_does_not_claim_a_rollback_undo_cannot_perform() {
     wait_until_ready(&tools).await;
     experiment(&tools, json!({"action": "clear_history"})).await;
 
-    let entity = *crate_weights(&tools).await.keys().next().expect("the fixture spawns crates");
-    let run = experiment(&tools, json!({"action": "execute", "actions": [{"type": "delete", "entity_id": entity}]})).await;
+    let entity = *crate_weights(&tools)
+        .await
+        .keys()
+        .next()
+        .expect("the fixture spawns crates");
+    let run = experiment(
+        &tools,
+        json!({"action": "execute", "actions": [{"type": "delete", "entity_id": entity}]}),
+    )
+    .await;
     assert_eq!(run["results"][0]["success"], json!(true), "{run}");
-    assert!(!crate_weights(&tools).await.contains_key(&entity), "the delete must reach the game");
+    assert!(
+        !crate_weights(&tools).await.contains_key(&entity),
+        "the delete must reach the game"
+    );
 
     let undo = experiment(&tools, json!({"action": "undo"})).await;
     let claimed = run["results"][0]["rollback_available"] == json!(true);
@@ -1088,7 +1405,11 @@ async fn experiment_delete_does_not_claim_a_rollback_undo_cannot_perform() {
     );
     if !claimed {
         let history = experiment(&tools, json!({"action": "history"})).await;
-        assert_eq!(history["count"], json!(1), "a refused undo must not drop the entry: {history}");
+        assert_eq!(
+            history["count"],
+            json!(1),
+            "a refused undo must not drop the entry: {history}"
+        );
     }
 }
 
@@ -1116,15 +1437,39 @@ async fn experiment_reports_a_refused_action_beside_the_ones_that_ran() {
     let crates = CRATE_WEIGHTS.len();
 
     // Not atomic: the spawn before the refusal stays, and the reply says so.
-    let run = experiment(&tools, json!({"action": "execute", "actions": [spawn_crate(9.0), refused_spawn()]})).await;
+    let run = experiment(
+        &tools,
+        json!({"action": "execute", "actions": [spawn_crate(9.0), refused_spawn()]}),
+    )
+    .await;
     assert_eq!(run["results"][0]["success"], json!(true), "{run}");
-    assert!(run["results"][0]["entity_id"].is_u64(), "the spawned entity is named: {run}");
+    assert!(
+        run["results"][0]["entity_id"].is_u64(),
+        "the spawned entity is named: {run}"
+    );
     assert_eq!(run["results"][1]["success"], json!(false), "{run}");
-    assert!(run["results"][1]["error"].as_str().is_some_and(|e| e.contains("empty")), "{run}");
-    assert_eq!(crate_weights(&tools).await.len(), crates + 1, "the first spawn reached the game");
+    assert!(
+        run["results"][1]["error"]
+            .as_str()
+            .is_some_and(|e| e.contains("empty")),
+        "{run}"
+    );
+    assert_eq!(
+        crate_weights(&tools).await.len(),
+        crates + 1,
+        "the first spawn reached the game"
+    );
     let undo = experiment(&tools, json!({"action": "undo"})).await;
-    assert_eq!(undo["result"]["success"], json!(true), "the spawn was recorded, so undo can reverse it: {undo}");
-    assert_eq!(crate_weights(&tools).await.len(), crates, "and it was recorded, so undo removes it");
+    assert_eq!(
+        undo["result"]["success"],
+        json!(true),
+        "the spawn was recorded, so undo can reverse it: {undo}"
+    );
+    assert_eq!(
+        crate_weights(&tools).await.len(),
+        crates,
+        "and it was recorded, so undo removes it"
+    );
 
     // Atomic: the refusal rolls the whole batch back.
     let run = experiment(
@@ -1133,17 +1478,29 @@ async fn experiment_reports_a_refused_action_beside_the_ones_that_ran() {
     )
     .await;
     assert_eq!(run["results"][0]["success"], json!(false), "{run}");
-    assert_eq!(crate_weights(&tools).await.len(), crates, "the atomic batch must leave no spawn behind: {run}");
+    assert_eq!(
+        crate_weights(&tools).await.len(),
+        crates,
+        "the atomic batch must leave no spawn behind: {run}"
+    );
 
     // And history still works afterwards: an open transaction would have disabled it.
-    let entity = *crate_weights(&tools).await.keys().next().expect("the fixture spawns crates");
+    let entity = *crate_weights(&tools)
+        .await
+        .keys()
+        .next()
+        .expect("the fixture spawns crates");
     let original = crate_weights(&tools).await[&entity];
     let modify = json!({"type": "modify", "entity_id": entity,
         "components": [{"type_id": "fixture_game::Crate", "value": {"weight": 99.0}}]});
     experiment(&tools, json!({"action": "execute", "actions": [modify]})).await;
     let undo = experiment(&tools, json!({"action": "undo"})).await;
     assert_eq!(undo["result"]["success"], json!(true), "{undo}");
-    assert_eq!(crate_weights(&tools).await[&entity], original, "undo must still restore after a failed batch");
+    assert_eq!(
+        crate_weights(&tools).await[&entity],
+        original,
+        "undo must still restore after a failed batch"
+    );
 }
 
 /// A batch that succeeds reports what each action did (the spawned entities are the only way to
@@ -1165,18 +1522,38 @@ async fn experiment_batch_names_what_it_spawned_and_can_be_undone() {
             json!({"action": "execute", "actions": [{"type": "batch", "atomic": atomic, "actions": [spawn_crate(8.0), spawn_crate(8.5)]}]}),
         )
         .await;
-        assert_eq!(run["results"][0]["success"], json!(true), "atomic {atomic}: {run}");
-        let inner = run["results"][0]["results"].as_array().unwrap_or_else(|| panic!("the batch lists its actions: {run}"));
-        let named: Vec<u64> = inner.iter().filter_map(|r| r["entity_id"].as_u64()).collect();
+        assert_eq!(
+            run["results"][0]["success"],
+            json!(true),
+            "atomic {atomic}: {run}"
+        );
+        let inner = run["results"][0]["results"]
+            .as_array()
+            .unwrap_or_else(|| panic!("the batch lists its actions: {run}"));
+        let named: Vec<u64> = inner
+            .iter()
+            .filter_map(|r| r["entity_id"].as_u64())
+            .collect();
         assert_eq!(named.len(), 2, "each spawn names its entity: {run}");
         let now = crate_weights(&tools).await;
-        assert!(named.iter().all(|id| now.contains_key(id)), "the named entities are in the game: {run}");
+        assert!(
+            named.iter().all(|id| now.contains_key(id)),
+            "the named entities are in the game: {run}"
+        );
 
         for _ in 0..2 {
             let undo = experiment(&tools, json!({"action": "undo"})).await;
-            assert_eq!(undo["result"]["success"], json!(true), "atomic {atomic}: {undo}");
+            assert_eq!(
+                undo["result"]["success"],
+                json!(true),
+                "atomic {atomic}: {undo}"
+            );
         }
-        assert_eq!(crate_weights(&tools).await, before, "atomic {atomic}: two undos remove the two spawns");
+        assert_eq!(
+            crate_weights(&tools).await,
+            before,
+            "atomic {atomic}: two undos remove the two spawns"
+        );
     }
 }
 
@@ -1195,23 +1572,43 @@ async fn experiment_offers_no_archetypes_and_refuses_fields_it_does_not_read() {
     wait_until_ready(&tools).await;
 
     let reply = experiment(&tools, json!({"action": "archetypes"})).await;
-    assert_eq!(reply["error"], json!("Unknown action"), "archetypes must not be an action: {reply}");
-    let valid = reply["available_actions"].as_array().unwrap_or_else(|| panic!("the refusal lists the actions: {reply}"));
-    assert!(valid.contains(&json!("execute")) && !valid.contains(&json!("archetypes")), "{reply}");
+    assert_eq!(
+        reply["error"],
+        json!("Unknown action"),
+        "archetypes must not be an action: {reply}"
+    );
+    let valid = reply["available_actions"]
+        .as_array()
+        .unwrap_or_else(|| panic!("the refusal lists the actions: {reply}"));
+    assert!(
+        valid.contains(&json!("execute")) && !valid.contains(&json!("archetypes")),
+        "{reply}"
+    );
 
     for (request, field) in [
-        (json!({"action": "execute", "actions": [{"type": "spawn", "archetype": "player", "components": []}]}), "archetype"),
+        (
+            json!({"action": "execute", "actions": [{"type": "spawn", "archetype": "player", "components": []}]}),
+            "archetype",
+        ),
         (
             json!({"action": "execute", "actions": [{"type": "modify", "entity_id": 1,
                 "components": [{"type_id": "fixture_game::Crate", "value": {"weight": 5}, "path": "weight"}]}]}),
             "path",
         ),
-        (json!({"action": "execute", "actions": [{"type": "batch", "atomic": true, "atomc": true, "actions": []}]}), "atomc"),
+        (
+            json!({"action": "execute", "actions": [{"type": "batch", "atomic": true, "atomc": true, "actions": []}]}),
+            "atomc",
+        ),
     ] {
         let error = serde_json::from_value::<ExperimentRequest>(request.clone())
-            .expect_err(&format!("{request} carries a field nothing reads, so it must be refused"))
+            .expect_err(&format!(
+                "{request} carries a field nothing reads, so it must be refused"
+            ))
             .to_string();
-        assert!(error.contains(field), "the refusal names `{field}`: {error}");
+        assert!(
+            error.contains(field),
+            "the refusal names `{field}`: {error}"
+        );
     }
 }
 
@@ -1234,13 +1631,30 @@ async fn experiment_refuses_a_batch_inside_a_batch_instead_of_half_reversing_it(
             json!({"action": "execute", "actions": [{"type": "batch", "atomic": outer_atomic, "actions": [spawn_crate(6.0), inner]}]}),
         )
         .await;
-        assert_eq!(run["results"][0]["success"], json!(false), "outer atomic {outer_atomic}: {run}");
-        let error = run["results"][0]["error"].as_str().unwrap_or_else(|| panic!("no error: {run}"));
-        assert!(error.contains("batch cannot contain a batch") && error.contains("Nothing was run"), "{error}");
-        assert_eq!(crate_weights(&tools).await, before, "outer atomic {outer_atomic}: nothing may have run");
+        assert_eq!(
+            run["results"][0]["success"],
+            json!(false),
+            "outer atomic {outer_atomic}: {run}"
+        );
+        let error = run["results"][0]["error"]
+            .as_str()
+            .unwrap_or_else(|| panic!("no error: {run}"));
+        assert!(
+            error.contains("batch cannot contain a batch") && error.contains("Nothing was run"),
+            "{error}"
+        );
+        assert_eq!(
+            crate_weights(&tools).await,
+            before,
+            "outer atomic {outer_atomic}: nothing may have run"
+        );
     }
     let history = experiment(&tools, json!({"action": "history"})).await;
-    assert_eq!(history["count"], json!(0), "nothing ran, so nothing is recorded: {history}");
+    assert_eq!(
+        history["count"],
+        json!(0),
+        "nothing ran, so nothing is recorded: {history}"
+    );
 }
 
 /// `modify` says what the game holds after the write. The game's answer to the write is "accepted",
@@ -1255,7 +1669,11 @@ async fn experiment_modify_reads_the_entity_back_and_says_when_it_does_not_hold_
     wait_until_ready(&tools).await;
     experiment(&tools, json!({"action": "clear_history"})).await;
 
-    let crate_entity = *crate_weights(&tools).await.keys().next().expect("the fixture spawns crates");
+    let crate_entity = *crate_weights(&tools)
+        .await
+        .keys()
+        .next()
+        .expect("the fixture spawns crates");
     let run = experiment(
         &tools,
         json!({"action": "execute", "actions": [{"type": "modify", "entity_id": crate_entity,
@@ -1263,11 +1681,21 @@ async fn experiment_modify_reads_the_entity_back_and_says_when_it_does_not_hold_
     )
     .await;
     assert_eq!(run["results"][0]["success"], json!(true), "{run}");
-    assert_eq!(run["results"][0]["read_back"]["matches"], json!(true), "nothing changes a crate's weight: {run}");
-    assert_eq!(run["results"][0]["read_back"]["components"]["fixture_game::Crate"]["weight"], json!(99.0), "{run}");
+    assert_eq!(
+        run["results"][0]["read_back"]["matches"],
+        json!(true),
+        "nothing changes a crate's weight: {run}"
+    );
+    assert_eq!(
+        run["results"][0]["read_back"]["components"]["fixture_game::Crate"]["weight"],
+        json!(99.0),
+        "{run}"
+    );
 
     let spinner = rows_of(&tools, "fixture_game::Spinner").await;
-    let spinner_entity = spinner[0]["entity"].as_u64().expect("a row names its entity");
+    let spinner_entity = spinner[0]["entity"]
+        .as_u64()
+        .expect("a row names its entity");
     let run = experiment(
         &tools,
         json!({"action": "execute", "actions": [{"type": "modify", "entity_id": spinner_entity,
@@ -1275,12 +1703,26 @@ async fn experiment_modify_reads_the_entity_back_and_says_when_it_does_not_hold_
     )
     .await;
     let result = &run["results"][0];
-    assert_eq!(result["success"], json!(true), "the game accepted the write: {run}");
-    assert_eq!(result["read_back"]["matches"], json!(false), "the spinner counts frames, so 1000000 is gone: {run}");
+    assert_eq!(
+        result["success"],
+        json!(true),
+        "the game accepted the write: {run}"
+    );
+    assert_eq!(
+        result["read_back"]["matches"],
+        json!(false),
+        "the spinner counts frames, so 1000000 is gone: {run}"
+    );
     let held = result["read_back"]["components"]["fixture_game::Spinner"]["frames"].as_u64();
-    assert!(held.is_some_and(|frames| frames > 1_000_000), "the read-back carries what the game holds: {run}");
+    assert!(
+        held.is_some_and(|frames| frames > 1_000_000),
+        "the read-back carries what the game holds: {run}"
+    );
     let message = result["message"].as_str().expect("a message");
-    assert!(message.contains("read back") && message.contains("accepted"), "the message says both halves: {message}");
+    assert!(
+        message.contains("read back") && message.contains("accepted"),
+        "the message says both halves: {message}"
+    );
 }
 
 /// `undo` and `redo` answer as what they are. The reply was the reverse operation's own result, so
@@ -1295,8 +1737,14 @@ async fn experiment_undo_and_redo_say_what_they_did_and_redo_follows_a_respawned
     experiment(&tools, json!({"action": "clear_history"})).await;
     let base = crate_weights(&tools).await;
 
-    let run = experiment(&tools, json!({"action": "execute", "actions": [spawn_crate(9.0)]})).await;
-    let spawned = run["results"][0]["entity_id"].as_u64().unwrap_or_else(|| panic!("no entity: {run}"));
+    let run = experiment(
+        &tools,
+        json!({"action": "execute", "actions": [spawn_crate(9.0)]}),
+    )
+    .await;
+    let spawned = run["results"][0]["entity_id"]
+        .as_u64()
+        .unwrap_or_else(|| panic!("no entity: {run}"));
     let run = experiment(
         &tools,
         json!({"action": "execute", "actions": [{"type": "modify", "entity_id": spawned,
@@ -1317,15 +1765,28 @@ async fn experiment_undo_and_redo_say_what_they_did_and_redo_follows_a_respawned
     assert_eq!(redo["result"]["success"], json!(true), "{redo}");
     assert_eq!(redo["result"]["action_type"], json!("redo"), "{redo}");
     assert_eq!(redo["result"]["of_action"], json!("spawn"), "{redo}");
-    let respawned = redo["result"]["entity_id"].as_u64().unwrap_or_else(|| panic!("no entity: {redo}"));
-    assert_ne!(respawned, spawned, "a despawned id is not reused, so the redo made a different entity");
+    let respawned = redo["result"]["entity_id"]
+        .as_u64()
+        .unwrap_or_else(|| panic!("no entity: {redo}"));
+    assert_ne!(
+        respawned, spawned,
+        "a despawned id is not reused, so the redo made a different entity"
+    );
 
     let redo = experiment(&tools, json!({"action": "redo"})).await;
-    assert_eq!(redo["result"]["success"], json!(true), "the modify must follow the respawned entity: {redo}");
+    assert_eq!(
+        redo["result"]["success"],
+        json!(true),
+        "the modify must follow the respawned entity: {redo}"
+    );
     assert_eq!(redo["result"]["of_action"], json!("modify"), "{redo}");
     let weights = crate_weights(&tools).await;
     assert_eq!(weights.len(), base.len() + 1, "{weights:?}");
-    assert_eq!(weights.get(&respawned), Some(&99.0), "the redone modify reached the respawned crate: {weights:?}");
+    assert_eq!(
+        weights.get(&respawned),
+        Some(&99.0),
+        "the redone modify reached the respawned crate: {weights:?}"
+    );
 }
 
 /// A game answers `bevy_fairy/status` with an `instance` that names the process: the same on every
@@ -1335,14 +1796,24 @@ async fn experiment_undo_and_redo_say_what_they_did_and_redo_follows_a_respawned
 async fn status_names_the_game_instance_and_a_second_game_has_another() {
     let first = tools_for(start_fixture());
     let second = tools_for(start_fixture());
-    let (a, b) = (wait_until_ready(&first).await, wait_until_ready(&second).await);
+    let (a, b) = (
+        wait_until_ready(&first).await,
+        wait_until_ready(&second).await,
+    );
     let instance = |status: &Value| status["instance"].as_str().map(str::to_string);
     let a_id = instance(&a).unwrap_or_else(|| panic!("status names no `instance`: {a}"));
     let b_id = instance(&b).unwrap_or_else(|| panic!("status names no `instance`: {b}"));
     assert!(!a_id.is_empty() && !b_id.is_empty());
-    assert_ne!(a_id, b_id, "two games started in one process must not share an instance");
+    assert_ne!(
+        a_id, b_id,
+        "two games started in one process must not share an instance"
+    );
     let again = wait_until_ready(&first).await;
-    assert_eq!(instance(&again), Some(a_id), "one game keeps its instance for its whole life");
+    assert_eq!(
+        instance(&again),
+        Some(a_id),
+        "one game keeps its instance for its whole life"
+    );
 }
 
 /// `experiment` keeps its history in the server, and the server outlives the game: after a restart
@@ -1367,7 +1838,11 @@ async fn experiment_undo_refuses_a_history_recorded_against_another_game() {
     // The game restarts: a new process whose crate has the same id and a weight of its own.
     let after_restart = tools_for(start_fixture());
     wait_until_ready(&after_restart).await;
-    assert_eq!(crate_weights(&after_restart).await.get(&entity), Some(&original), "the fixture is deterministic");
+    assert_eq!(
+        crate_weights(&after_restart).await.get(&entity),
+        Some(&original),
+        "the fixture is deterministic"
+    );
     brp(
         &after_restart,
         json!({"method": "world.mutate_components", "params": {
@@ -1377,20 +1852,43 @@ async fn experiment_undo_refuses_a_history_recorded_against_another_game() {
     assert_eq!(crate_weights(&after_restart).await[&entity], 42.0);
 
     let history = experiment(&after_restart, json!({"action": "history"})).await;
-    assert_eq!(history["stale"], json!(true), "history must say it is from another game: {history}");
+    assert_eq!(
+        history["stale"],
+        json!(true),
+        "history must say it is from another game: {history}"
+    );
 
     let undo = experiment(&after_restart, json!({"action": "undo"})).await;
-    assert!(undo["error"].is_string(), "undo of another game's history must be refused: {undo}");
     assert!(
-        undo["message"].as_str().is_some_and(|m| m.contains("another game") && m.contains("discarded")),
+        undo["error"].is_string(),
+        "undo of another game's history must be refused: {undo}"
+    );
+    assert!(
+        undo["message"]
+            .as_str()
+            .is_some_and(|m| m.contains("another game") && m.contains("discarded")),
         "the refusal says why and what happened to the history: {undo}"
     );
-    assert_eq!(crate_weights(&after_restart).await[&entity], 42.0, "nothing may be written into the new game");
+    assert_eq!(
+        crate_weights(&after_restart).await[&entity],
+        42.0,
+        "nothing may be written into the new game"
+    );
 
     let history = experiment(&after_restart, json!({"action": "history"})).await;
-    assert_eq!(history["count"], json!(0), "the stale history is gone: {history}");
+    assert_eq!(
+        history["count"],
+        json!(0),
+        "the stale history is gone: {history}"
+    );
     let again = experiment(&after_restart, json!({"action": "undo"})).await;
-    assert_eq!(again["result"]["message"].as_str().map(|m| m.contains("Nothing to undo")), Some(true), "{again}");
+    assert_eq!(
+        again["result"]["message"]
+            .as_str()
+            .map(|m| m.contains("Nothing to undo")),
+        Some(true),
+        "{again}"
+    );
 }
 
 /// `execute` against a new game does not need a person to clear the old game's history first: it
@@ -1401,23 +1899,56 @@ async fn experiment_execute_drops_the_history_of_a_game_that_is_gone_and_says_so
     let before_restart = tools_for(start_fixture());
     wait_until_ready(&before_restart).await;
     experiment(&before_restart, json!({"action": "clear_history"})).await;
-    experiment(&before_restart, json!({"action": "execute", "actions": [spawn_crate(9.0), spawn_crate(8.0)]})).await;
+    experiment(
+        &before_restart,
+        json!({"action": "execute", "actions": [spawn_crate(9.0), spawn_crate(8.0)]}),
+    )
+    .await;
 
     let after_restart = tools_for(start_fixture());
     wait_until_ready(&after_restart).await;
-    let run = experiment(&after_restart, json!({"action": "execute", "actions": [spawn_crate(7.0)]})).await;
+    let run = experiment(
+        &after_restart,
+        json!({"action": "execute", "actions": [spawn_crate(7.0)]}),
+    )
+    .await;
     assert_eq!(run["results"][0]["success"], json!(true), "{run}");
-    assert_eq!(run["history_discarded"]["entries"], json!(2), "the reply counts what it dropped: {run}");
-    assert!(run["history_discarded"]["reason"].as_str().is_some_and(|r| r.contains("another game")), "{run}");
+    assert_eq!(
+        run["history_discarded"]["entries"],
+        json!(2),
+        "the reply counts what it dropped: {run}"
+    );
+    assert!(
+        run["history_discarded"]["reason"]
+            .as_str()
+            .is_some_and(|r| r.contains("another game")),
+        "{run}"
+    );
     let history = experiment(&after_restart, json!({"action": "history"})).await;
-    assert_eq!(history["count"], json!(1), "only the new game's action is on record: {history}");
+    assert_eq!(
+        history["count"],
+        json!(1),
+        "only the new game's action is on record: {history}"
+    );
     assert_eq!(history["stale"], json!(false), "{history}");
 
     let undo = experiment(&after_restart, json!({"action": "undo"})).await;
-    assert_eq!(undo["result"]["success"], json!(true), "the new game's own history still undoes: {undo}");
+    assert_eq!(
+        undo["result"]["success"],
+        json!(true),
+        "the new game's own history still undoes: {undo}"
+    );
     let history = experiment(&after_restart, json!({"action": "history"})).await;
-    assert_eq!(history["count"], json!(0), "the one action was undone: {history}");
-    assert_eq!(history["redoable"], json!(1), "and can be redone: {history}");
+    assert_eq!(
+        history["count"],
+        json!(0),
+        "the one action was undone: {history}"
+    );
+    assert_eq!(
+        history["redoable"],
+        json!(1),
+        "and can be redone: {history}"
+    );
 }
 
 /// Call the `hypothesis` tool the way an agent does: the reply, and whether the tool called it an error.
@@ -1448,7 +1979,11 @@ async fn hypothesis(tools: &BevyDebuggerTools, request: Value) -> (Value, bool) 
 async fn hypothesis_whose_actions_the_game_refused_is_not_evaluated_not_rejected() {
     let tools = tools_for(start_fixture());
     wait_until_ready(&tools).await;
-    let entity = *crate_weights(&tools).await.keys().next().expect("the fixture spawns crates");
+    let entity = *crate_weights(&tools)
+        .await
+        .keys()
+        .next()
+        .expect("the fixture spawns crates");
 
     let (reply, failed) = hypothesis(
         &tools,
@@ -1462,19 +1997,42 @@ async fn hypothesis_whose_actions_the_game_refused_is_not_evaluated_not_rejected
     )
     .await;
 
-    assert!(!failed, "a claim that could not be checked is a result, not a tool failure: {reply}");
-    assert_eq!(reply["verdict"], json!("NOT_EVALUATED"), "the condition was never read: {reply}");
-    assert_eq!(reply["success_rate"], Value::Null, "no iteration evaluated the claim, so it has no rate: {reply}");
+    assert!(
+        !failed,
+        "a claim that could not be checked is a result, not a tool failure: {reply}"
+    );
+    assert_eq!(
+        reply["verdict"],
+        json!("NOT_EVALUATED"),
+        "the condition was never read: {reply}"
+    );
+    assert_eq!(
+        reply["success_rate"],
+        Value::Null,
+        "no iteration evaluated the claim, so it has no rate: {reply}"
+    );
     let stats = &reply["statistics"];
     assert_eq!(
         (stats["held"].as_u64(), stats["violated"].as_u64()),
         (Some(0), Some(0)),
         "an iteration that never evaluated the claim neither held nor violated it: {reply}"
     );
-    assert_eq!(stats["not_evaluated"], stats["iterations_run"], "every iteration failed before the condition: {reply}");
-    let error = reply["examples"][0]["error"].as_str().unwrap_or_else(|| panic!("no example error: {reply}"));
-    assert!(error.contains("NoSuchComponent"), "the example must carry the game's own message, not a constant: {error}");
-    assert_eq!(reply["examples"][0]["kind"], json!("not_evaluated"), "{reply}");
+    assert_eq!(
+        stats["not_evaluated"], stats["iterations_run"],
+        "every iteration failed before the condition: {reply}"
+    );
+    let error = reply["examples"][0]["error"]
+        .as_str()
+        .unwrap_or_else(|| panic!("no example error: {reply}"));
+    assert!(
+        error.contains("NoSuchComponent"),
+        "the example must carry the game's own message, not a constant: {error}"
+    );
+    assert_eq!(
+        reply["examples"][0]["kind"],
+        json!("not_evaluated"),
+        "{reply}"
+    );
 }
 
 /// Zero iterations evaluated nothing. Before the fix `iterations: 0` under a varied strategy
@@ -1497,7 +2055,10 @@ async fn hypothesis_that_ran_no_iterations_is_not_evaluated() {
             }),
         )
         .await;
-        assert!(failed || reply["verdict"] == json!("NOT_EVALUATED"), "threshold {threshold}: zero iterations evaluated nothing: {reply}");
+        assert!(
+            failed || reply["verdict"] == json!("NOT_EVALUATED"),
+            "threshold {threshold}: zero iterations evaluated nothing: {reply}"
+        );
     }
 }
 
@@ -1509,7 +2070,10 @@ async fn hypothesis_about_the_crate_count_is_confirmed_or_rejected_by_the_fixtur
     let tools = tools_for(start_fixture());
     wait_until_ready(&tools).await;
 
-    for (count, verdict) in [(CRATE_WEIGHTS.len(), "CONFIRMED"), (CRATE_WEIGHTS.len() + 1, "REJECTED")] {
+    for (count, verdict) in [
+        (CRATE_WEIGHTS.len(), "CONFIRMED"),
+        (CRATE_WEIGHTS.len() + 1, "REJECTED"),
+    ] {
         let (reply, failed) = hypothesis(
             &tools,
             json!({
@@ -1540,11 +2104,23 @@ async fn hypothesis_read_once_does_not_claim_certainty() {
     )
     .await;
     assert!(!failed, "{reply}");
-    assert_eq!(reply["statistics"]["iterations_run"], json!(1), "no variation is one iteration: {reply}");
-    let lower = reply["confidence_interval"]["lower"].as_f64().unwrap_or_else(|| panic!("no interval: {reply}"));
-    assert!((0.2..0.22).contains(&lower), "Wilson 95% lower bound of 1 of 1 is 0.2065, not {lower}: {reply}");
+    assert_eq!(
+        reply["statistics"]["iterations_run"],
+        json!(1),
+        "no variation is one iteration: {reply}"
+    );
+    let lower = reply["confidence_interval"]["lower"]
+        .as_f64()
+        .unwrap_or_else(|| panic!("no interval: {reply}"));
+    assert!(
+        (0.2..0.22).contains(&lower),
+        "Wilson 95% lower bound of 1 of 1 is 0.2065, not {lower}: {reply}"
+    );
     assert_eq!(reply["confidence_interval"]["upper"], json!(1.0), "{reply}");
-    assert!(reply.get("confidence_level").is_none(), "a made-up percentage must not be reported: {reply}");
+    assert!(
+        reply.get("confidence_level").is_none(),
+        "a made-up percentage must not be reported: {reply}"
+    );
 }
 
 /// `threshold` is a share of iterations, so a value outside 0..=1 can never be met (or is always
@@ -1570,9 +2146,16 @@ async fn hypothesis_refuses_a_threshold_outside_zero_to_one_before_touching_the_
         )
         .await;
         assert!(failed, "threshold {threshold} must be refused: {reply}");
-        assert!(reply.to_string().contains("threshold"), "the refusal names the argument: {reply}");
+        assert!(
+            reply.to_string().contains("threshold"),
+            "the refusal names the argument: {reply}"
+        );
     }
-    assert_eq!(crate_weights(&tools).await, before, "a refused request must not have changed the game");
+    assert_eq!(
+        crate_weights(&tools).await,
+        before,
+        "a refused request must not have changed the game"
+    );
 }
 
 /// The variation generators call `random_range` on a range the caller chose, and it panics on an
@@ -1583,14 +2166,33 @@ async fn hypothesis_refuses_a_threshold_outside_zero_to_one_before_touching_the_
 async fn hypothesis_refuses_variation_settings_that_would_panic_the_generator() {
     let tools = tools_for(start_fixture());
     wait_until_ready(&tools).await;
-    let entity = *crate_weights(&tools).await.keys().next().expect("the fixture spawns crates");
+    let entity = *crate_weights(&tools)
+        .await
+        .keys()
+        .next()
+        .expect("the fixture spawns crates");
 
     for (settings, argument) in [
-        (json!({"variation_type": "random", "numeric_min": 5.0, "numeric_max": 5.0}), "numeric_max"),
-        (json!({"variation_type": "random", "numeric_min": 9.0, "numeric_max": 1.0}), "numeric_max"),
-        (json!({"variation_type": "random", "bool_probability": -1.0}), "bool_probability"),
-        (json!({"variation_type": "fuzz", "max_mutations": 0}), "max_mutations"),
-        (json!({"variation_type": "fuzz", "mutation_probability": 1.5}), "mutation_probability"),
+        (
+            json!({"variation_type": "random", "numeric_min": 5.0, "numeric_max": 5.0}),
+            "numeric_max",
+        ),
+        (
+            json!({"variation_type": "random", "numeric_min": 9.0, "numeric_max": 1.0}),
+            "numeric_max",
+        ),
+        (
+            json!({"variation_type": "random", "bool_probability": -1.0}),
+            "bool_probability",
+        ),
+        (
+            json!({"variation_type": "fuzz", "max_mutations": 0}),
+            "max_mutations",
+        ),
+        (
+            json!({"variation_type": "fuzz", "mutation_probability": 1.5}),
+            "mutation_probability",
+        ),
     ] {
         let mut request = json!({
             "action": "test",
@@ -1600,10 +2202,16 @@ async fn hypothesis_refuses_variation_settings_that_would_panic_the_generator() 
                 "components": [{"type_id": "fixture_game::Crate", "value": {"weight": 99.0}}]}],
             "iterations": 3
         });
-        request.as_object_mut().expect("an object").extend(settings.as_object().expect("an object").clone());
+        request
+            .as_object_mut()
+            .expect("an object")
+            .extend(settings.as_object().expect("an object").clone());
         let (reply, failed) = hypothesis(&tools, request).await;
         assert!(failed, "{settings} must be refused: {reply}");
-        assert!(reply.to_string().contains(argument), "the refusal names `{argument}`: {reply}");
+        assert!(
+            reply.to_string().contains(argument),
+            "the refusal names `{argument}`: {reply}"
+        );
     }
 }
 
@@ -1618,20 +2226,50 @@ async fn hypothesis_refuses_a_condition_it_cannot_read_instead_of_confirming_it(
 
     let crate_type = "fixture_game::Crate";
     for (condition, names) in [
-        (json!({"type": "entity_exists", "component_types": crate_type}), "component_types"),
-        (json!({"type": "entity_exists", "component_types": [crate_type, 3]}), "component_types"),
-        (json!({"type": "entity_exists", "component_types": [crate_type], "count": "6"}), "count"),
-        (json!({"type": "entity_exists", "component_types": []}), "component_types"),
+        (
+            json!({"type": "entity_exists", "component_types": crate_type}),
+            "component_types",
+        ),
+        (
+            json!({"type": "entity_exists", "component_types": [crate_type, 3]}),
+            "component_types",
+        ),
+        (
+            json!({"type": "entity_exists", "component_types": [crate_type], "count": "6"}),
+            "count",
+        ),
+        (
+            json!({"type": "entity_exists", "component_types": []}),
+            "component_types",
+        ),
         (json!({"type": "entity_exists"}), "component_types"),
-        (json!({"type": "all", "assertions": [format!("entity_exists:{crate_type}")]}), "assertions"),
+        (
+            json!({"type": "all", "assertions": [format!("entity_exists:{crate_type}")]}),
+            "assertions",
+        ),
         (json!({"type": "all", "assertions": []}), "assertions"),
         (json!({"type": "any", "assertions": []}), "assertions"),
-        (json!({"type": "component_equals", "entity_id": "12", "component_type": crate_type, "expected_value": 1}), "entity_id"),
-        (json!({"type": "entity_exists", "component_types": [crate_type], "cuont": 6}), "cuont"),
-        (json!({"type": "entity_exist", "component_types": [crate_type]}), "entity_exists"),
+        (
+            json!({"type": "component_equals", "entity_id": "12", "component_type": crate_type, "expected_value": 1}),
+            "entity_id",
+        ),
+        (
+            json!({"type": "entity_exists", "component_types": [crate_type], "cuont": 6}),
+            "cuont",
+        ),
+        (
+            json!({"type": "entity_exist", "component_types": [crate_type]}),
+            "entity_exists",
+        ),
         (json!("entity_exists:"), "component"),
-        (json!({"type": "performance_within", "metric": "frame_time", "max_value": 20.0}), "frame time"),
-        (json!({"type": "performance_within", "metric": "frame_tim", "max_value": 20.0}), "frame_time"),
+        (
+            json!({"type": "performance_within", "metric": "frame_time", "max_value": 20.0}),
+            "frame time",
+        ),
+        (
+            json!({"type": "performance_within", "metric": "frame_tim", "max_value": 20.0}),
+            "frame_time",
+        ),
         (
             json!({"type": "action_succeeds", "action": {"type": "spawn", "components": [{"type_id": "", "value": 1}]}}),
             "type_id",
@@ -1645,7 +2283,10 @@ async fn hypothesis_refuses_a_condition_it_cannot_read_instead_of_confirming_it(
             .await;
             let refused = failed || reply["valid"] == json!(false);
             assert!(refused, "{action} must refuse {condition}, got: {reply}");
-            assert!(reply.get("verdict").is_none(), "{action} of {condition} must not carry a verdict: {reply}");
+            assert!(
+                reply.get("verdict").is_none(),
+                "{action} of {condition} must not carry a verdict: {reply}"
+            );
             assert!(
                 reply.to_string().contains(names),
                 "{action} of {condition}: the refusal must name `{names}`: {reply}"
@@ -1670,9 +2311,16 @@ async fn hypothesis_action_succeeds_without_an_action_is_refused_and_spawns_noth
         json!({"action": "test", "description": "an action succeeds", "success_condition": "action_succeeds"}),
     )
     .await;
-    assert!(failed, "a string cannot carry an action, so it must be refused: {reply}");
+    assert!(
+        failed,
+        "a string cannot carry an action, so it must be refused: {reply}"
+    );
     assert!(reply.to_string().contains("action"), "{reply}");
-    assert_eq!(count(brp(&tools, query).await), before, "the placeholder must not spawn anything");
+    assert_eq!(
+        count(brp(&tools, query).await),
+        before,
+        "the placeholder must not spawn anything"
+    );
 }
 
 /// The game reports a crate's weight as `3.0`; an agent writes the whole number `3`. They are the
@@ -1685,7 +2333,11 @@ async fn hypothesis_component_equals_does_not_tell_3_from_3_point_0() {
     let tools = tools_for(start_fixture());
     wait_until_ready(&tools).await;
 
-    for (weight, verdict) in [(json!(3), "CONFIRMED"), (json!(3.0), "CONFIRMED"), (json!(3.5), "REJECTED")] {
+    for (weight, verdict) in [
+        (json!(3), "CONFIRMED"),
+        (json!(3.0), "CONFIRMED"),
+        (json!(3.5), "REJECTED"),
+    ] {
         let (reply, failed) = hypothesis(
             &tools,
             json!({
@@ -1726,18 +2378,34 @@ async fn hypothesis_refuses_a_component_the_game_never_registered_instead_of_jud
             json!({"action": "test", "description": "a claim", "success_condition": condition}),
         )
         .await;
-        assert!(failed, "{condition} names a component the game does not have: {reply}");
+        assert!(
+            failed,
+            "{condition} names a component the game does not have: {reply}"
+        );
         let text = reply.to_string();
-        assert!(text.contains("Crat") && text.contains("not registered"), "the refusal names it: {text}");
-        assert!(text.contains("fixture_game::Crate"), "and offers the registered name it is close to: {text}");
+        assert!(
+            text.contains("Crat") && text.contains("not registered"),
+            "the refusal names it: {text}"
+        );
+        assert!(
+            text.contains("fixture_game::Crate"),
+            "and offers the registered name it is close to: {text}"
+        );
     }
 
     // The control: a registered component that no entity holds.
     let registered = brp(&tools, json!({"method": "world.list_components"})).await;
     let mut unheld = None;
-    for path in registered.as_array().expect("world.list_components returns an array") {
+    for path in registered
+        .as_array()
+        .expect("world.list_components returns an array")
+    {
         let path = path.as_str().expect("a component path is a string");
-        let rows = brp(&tools, json!({"method": "world.query", "params": {"data": {"components": [path]}}})).await;
+        let rows = brp(
+            &tools,
+            json!({"method": "world.query", "params": {"data": {"components": [path]}}}),
+        )
+        .await;
         if rows.as_array().is_some_and(Vec::is_empty) {
             unheld = Some(path.to_string());
             break;
@@ -1749,8 +2417,15 @@ async fn hypothesis_refuses_a_component_the_game_never_registered_instead_of_jud
         json!({"action": "test", "description": "an entity holds it", "success_condition": format!("entity_exists:{unheld}")}),
     )
     .await;
-    assert!(!failed, "{unheld} is registered, so the claim is answerable: {reply}");
-    assert_eq!(reply["verdict"], json!("REJECTED"), "no entity holds {unheld}: {reply}");
+    assert!(
+        !failed,
+        "{unheld} is registered, so the claim is answerable: {reply}"
+    );
+    assert_eq!(
+        reply["verdict"],
+        json!("REJECTED"),
+        "no entity holds {unheld}: {reply}"
+    );
 }
 
 /// The crates a game test leaves behind or takes away, as a count.
@@ -1795,8 +2470,16 @@ async fn hypothesis_variation_reaches_the_fields_inside_a_component() {
         (Some(1), Some(1)),
         "the grid wrote weight 10 and weight 20, so the claim held once: {reply}"
     );
-    assert_eq!(stats["varied_iterations"], json!(2), "both iterations ran a changed action: {reply}");
-    assert_eq!(crate_weights(&tools).await, before, "the modifies must have been reversed: {reply}");
+    assert_eq!(
+        stats["varied_iterations"],
+        json!(2),
+        "both iterations ran a changed action: {reply}"
+    );
+    assert_eq!(
+        crate_weights(&tools).await,
+        before,
+        "the modifies must have been reversed: {reply}"
+    );
 }
 
 /// A variation changes the values inside `actions`. With nothing there to change, N iterations are
@@ -1826,13 +2509,23 @@ async fn hypothesis_refuses_a_variation_that_would_change_nothing() {
                 }),
             )
             .await;
-            assert!(failed, "{kind} over {actions} changes nothing and must be refused: {reply}");
+            assert!(
+                failed,
+                "{kind} over {actions} changes nothing and must be refused: {reply}"
+            );
             let text = reply.to_string();
-            assert!(text.contains(kind) && text.contains("actions"), "the refusal names the variation and the fix: {text}");
+            assert!(
+                text.contains(kind) && text.contains("actions"),
+                "the refusal names the variation and the fix: {text}"
+            );
             assert!(reply.get("verdict").is_none(), "{reply}");
         }
     }
-    assert_eq!(crate_weights(&tools).await, before, "a refused request must not have changed the game");
+    assert_eq!(
+        crate_weights(&tools).await,
+        before,
+        "a refused request must not have changed the game"
+    );
 }
 
 /// Every iteration starts from the game the last one found. The claim below ("after the spawn
@@ -1861,11 +2554,19 @@ async fn hypothesis_puts_the_game_back_after_every_iteration() {
     .await;
 
     assert!(!failed, "{reply}");
-    assert_eq!(reply["statistics"]["held"], json!(5), "each iteration starts from {crates} crates: {reply}");
+    assert_eq!(
+        reply["statistics"]["held"],
+        json!(5),
+        "each iteration starts from {crates} crates: {reply}"
+    );
     assert_eq!(reply["verdict"], json!("CONFIRMED"), "{reply}");
     assert_eq!(reply["game_state"]["actions_reversed"], json!(5), "{reply}");
     assert_eq!(reply["game_state"]["left_applied"], json!(0), "{reply}");
-    assert_eq!(crate_count(&tools).await, crates, "the game is as it was found: {reply}");
+    assert_eq!(
+        crate_count(&tools).await,
+        crates,
+        "the game is as it was found: {reply}"
+    );
 }
 
 /// What cannot be put back is said, not hidden. A despawned entity returns as a different one, so
@@ -1889,9 +2590,17 @@ async fn hypothesis_says_what_it_could_not_put_back() {
     )
     .await;
     assert!(!failed, "{reply}");
-    assert_eq!(reply["game_state"]["left_applied"], json!(1), "the delete cannot be undone: {reply}");
+    assert_eq!(
+        reply["game_state"]["left_applied"],
+        json!(1),
+        "the delete cannot be undone: {reply}"
+    );
     assert_eq!(reply["game_state"]["actions_reversed"], json!(0), "{reply}");
-    assert_eq!(crate_count(&tools).await, before.len() - 1, "the delete reached the game and stayed");
+    assert_eq!(
+        crate_count(&tools).await,
+        before.len() - 1,
+        "the delete reached the game and stayed"
+    );
 
     let after_delete = crate_count(&tools).await;
     let (reply, failed) = hypothesis(
@@ -1906,8 +2615,16 @@ async fn hypothesis_says_what_it_could_not_put_back() {
     .await;
     assert!(!failed, "{reply}");
     assert_eq!(reply["verdict"], json!("CONFIRMED"), "{reply}");
-    assert_eq!(reply["game_state"]["actions_reversed"], json!(1), "the probe's spawn was reversed: {reply}");
-    assert_eq!(crate_count(&tools).await, after_delete, "the probe must not leave a crate: {reply}");
+    assert_eq!(
+        reply["game_state"]["actions_reversed"],
+        json!(1),
+        "the probe's spawn was reversed: {reply}"
+    );
+    assert_eq!(
+        crate_count(&tools).await,
+        after_delete,
+        "the probe must not leave a crate: {reply}"
+    );
 }
 
 /// `timeout` bounds the run, and the client is free between iterations. Before the fix it bounded
@@ -1935,24 +2652,49 @@ async fn hypothesis_timeout_bounds_the_whole_run_and_leaves_the_client_free() {
     let probe = async {
         tokio::time::sleep(Duration::from_millis(400)).await;
         let asked = Instant::now();
-        tools.status(Parameters(NoArgs {})).await.expect("status returns a result");
+        tools
+            .status(Parameters(NoArgs {}))
+            .await
+            .expect("status returns a result");
         asked.elapsed()
     };
     let ((reply, failed), waited) = tokio::join!(run, probe);
 
     assert!(!failed, "{reply}");
-    assert!(started.elapsed() < Duration::from_secs(8), "a 1 s timeout bounds the run, took {:?}", started.elapsed());
-    assert!(waited < Duration::from_secs(2), "`status` waited {waited:?} for a run that holds the client throughout");
+    assert!(
+        started.elapsed() < Duration::from_secs(8),
+        "a 1 s timeout bounds the run, took {:?}",
+        started.elapsed()
+    );
+    assert!(
+        waited < Duration::from_secs(2),
+        "`status` waited {waited:?} for a run that holds the client throughout"
+    );
     let stats = &reply["statistics"];
     assert_eq!(stats["iterations_planned"], json!(400), "{reply}");
-    let run_count = stats["iterations_run"].as_u64().expect("iterations_run is a number");
-    assert!(run_count < 400, "the 1 s timeout must have cut the run: {reply}");
+    let run_count = stats["iterations_run"]
+        .as_u64()
+        .expect("iterations_run is a number");
     assert!(
-        reply["stopped_early"].as_str().is_some_and(|why| why.contains("timeout")),
+        run_count < 400,
+        "the 1 s timeout must have cut the run: {reply}"
+    );
+    assert!(
+        reply["stopped_early"]
+            .as_str()
+            .is_some_and(|why| why.contains("timeout")),
         "the reply says why it stopped: {reply}"
     );
-    assert_ne!(reply["verdict"], json!("CONFIRMED"), "iterations that never ran cannot confirm the claim: {reply}");
-    assert_eq!(crate_count(&tools).await, crates, "the run stopped between iterations and left the game as it found it: {reply}");
+    assert_ne!(
+        reply["verdict"],
+        json!("CONFIRMED"),
+        "iterations that never ran cannot confirm the claim: {reply}"
+    );
+    assert_eq!(
+        crate_count(&tools).await,
+        crates,
+        "the run stopped between iterations and left the game as it found it: {reply}"
+    );
 }
 
 /// What an atomic batch could not roll back is counted. Its actions are kept out of history while
@@ -1978,11 +2720,21 @@ async fn hypothesis_counts_what_an_atomic_batch_could_not_roll_back() {
     .await;
 
     assert!(!failed, "{reply}");
-    assert_eq!(reply["statistics"]["not_evaluated"], json!(1), "the batch failed before the condition: {reply}");
-    assert_eq!(crate_count(&tools).await, before.len() - 1, "the delete reached the game and the rollback could not undo it");
+    assert_eq!(
+        reply["statistics"]["not_evaluated"],
+        json!(1),
+        "the batch failed before the condition: {reply}"
+    );
+    assert_eq!(
+        crate_count(&tools).await,
+        before.len() - 1,
+        "the delete reached the game and the rollback could not undo it"
+    );
     assert_eq!(reply["game_state"]["left_applied"], json!(1), "{reply}");
     assert!(
-        !reply["game_state"]["note"].as_str().is_some_and(|note| note.starts_with("every change")),
+        !reply["game_state"]["note"]
+            .as_str()
+            .is_some_and(|note| note.starts_with("every change")),
         "the note must not say everything was reversed: {reply}"
     );
 }
@@ -2010,9 +2762,17 @@ async fn hypothesis_reverses_every_action_of_an_iteration_however_many_there_are
     .await;
 
     assert!(!failed, "{reply}");
-    assert_eq!(reply["game_state"]["actions_reversed"], json!(101), "{reply}");
+    assert_eq!(
+        reply["game_state"]["actions_reversed"],
+        json!(101),
+        "{reply}"
+    );
     assert_eq!(reply["game_state"]["left_applied"], json!(0), "{reply}");
-    assert_eq!(crate_count(&tools).await, crates, "every spawn was put back: {reply}");
+    assert_eq!(
+        crate_count(&tools).await,
+        crates,
+        "every spawn was put back: {reply}"
+    );
 }
 
 /// The values a grid lists are written as given. A crate's weight is an `f32`, and an agent may
@@ -2022,7 +2782,11 @@ async fn hypothesis_reverses_every_action_of_an_iteration_however_many_there_are
 async fn hypothesis_grid_writes_the_listed_values_as_given_over_an_integer_literal() {
     let tools = tools_for(start_fixture());
     wait_until_ready(&tools).await;
-    let entity = *crate_weights(&tools).await.keys().next().expect("the fixture spawns crates");
+    let entity = *crate_weights(&tools)
+        .await
+        .keys()
+        .next()
+        .expect("the fixture spawns crates");
 
     let (reply, failed) = hypothesis(
         &tools,
@@ -2041,7 +2805,11 @@ async fn hypothesis_grid_writes_the_listed_values_as_given_over_an_integer_liter
 
     assert!(!failed, "{reply}");
     let stats = &reply["statistics"];
-    assert_eq!((stats["held"].as_u64(), stats["violated"].as_u64()), (Some(1), Some(1)), "{reply}");
+    assert_eq!(
+        (stats["held"].as_u64(), stats["violated"].as_u64()),
+        (Some(1), Some(1)),
+        "{reply}"
+    );
 }
 
 /// A variation with nothing to run is refused with the argument to fix, not answered
@@ -2050,7 +2818,11 @@ async fn hypothesis_grid_writes_the_listed_values_as_given_over_an_integer_liter
 async fn hypothesis_refuses_an_empty_plan_and_names_the_argument() {
     let tools = tools_for(start_fixture());
     wait_until_ready(&tools).await;
-    let entity = *crate_weights(&tools).await.keys().next().expect("the fixture spawns crates");
+    let entity = *crate_weights(&tools)
+        .await
+        .keys()
+        .next()
+        .expect("the fixture spawns crates");
 
     let (reply, failed) = hypothesis(
         &tools,
@@ -2067,7 +2839,10 @@ async fn hypothesis_refuses_an_empty_plan_and_names_the_argument() {
     .await;
 
     assert!(failed, "a plan of zero iterations must be refused: {reply}");
-    assert!(reply.to_string().contains("iterations"), "the refusal names the argument: {reply}");
+    assert!(
+        reply.to_string().contains("iterations"),
+        "the refusal names the argument: {reply}"
+    );
 }
 
 /// `quick_test` fixes `iterations` at 10 and `timeout` at 10 s. Given `iterations: 3` it ran 10 and
@@ -2083,20 +2858,35 @@ async fn hypothesis_quick_test_refuses_the_arguments_it_would_ignore() {
             "description": "the fixture keeps its crates",
             "success_condition": "entity_exists:fixture_game::Crate",
         });
-        request.as_object_mut().expect("an object").extend(extra.as_object().expect("an object").clone());
+        request
+            .as_object_mut()
+            .expect("an object")
+            .extend(extra.as_object().expect("an object").clone());
         request
     };
 
     for (argument, value) in [("iterations", json!(3)), ("timeout", json!(2))] {
         let (reply, failed) = hypothesis(&tools, claim(json!({ argument: value }))).await;
-        assert!(failed, "`{argument}` would be ignored by quick_test, so the call must be refused: {reply}");
+        assert!(
+            failed,
+            "`{argument}` would be ignored by quick_test, so the call must be refused: {reply}"
+        );
         let text = reply.to_string();
-        assert!(text.contains(argument) && text.contains("quick_test"), "the refusal names `{argument}` and the action: {text}");
-        assert!(text.contains("`test`"), "the refusal names the action that takes the argument: {text}");
+        assert!(
+            text.contains(argument) && text.contains("quick_test"),
+            "the refusal names `{argument}` and the action: {text}"
+        );
+        assert!(
+            text.contains("`test`"),
+            "the refusal names the action that takes the argument: {text}"
+        );
     }
 
     let (reply, failed) = hypothesis(&tools, claim(json!({}))).await;
-    assert!(!failed, "quick_test with no argument it would drop still runs: {reply}");
+    assert!(
+        !failed,
+        "quick_test with no argument it would drop still runs: {reply}"
+    );
     assert!(reply["verdict"].is_string(), "{reply}");
 }
 
@@ -2129,7 +2919,11 @@ async fn hypothesis_reverses_an_iterations_changes_newest_first() {
     assert!(!failed, "{reply}");
     assert_eq!(reply["verdict"], json!("CONFIRMED"), "{reply}");
     assert_eq!(reply["game_state"]["actions_reversed"], json!(2), "{reply}");
-    assert_eq!(crate_weights(&tools).await, before, "the crate is back to the weight it had: {reply}");
+    assert_eq!(
+        crate_weights(&tools).await,
+        before,
+        "the crate is back to the weight it had: {reply}"
+    );
 }
 
 /// The real `bevy-fairy` binary over stdio, pointed at a fixture: a tool is reached by name, the
@@ -2157,7 +2951,10 @@ impl StdioServer {
         let stdout = child.stdout.take().expect("stdout is piped");
         let (send, replies) = std::sync::mpsc::channel();
         std::thread::spawn(move || {
-            for line in std::io::BufReader::new(stdout).lines().map_while(Result::ok) {
+            for line in std::io::BufReader::new(stdout)
+                .lines()
+                .map_while(Result::ok)
+            {
                 if let Ok(message) = serde_json::from_str::<Value>(&line) {
                     if send.send(message).is_err() {
                         break;
@@ -2165,7 +2962,12 @@ impl StdioServer {
                 }
             }
         });
-        let mut server = Self { child, stdin, replies, next_id: 0 };
+        let mut server = Self {
+            child,
+            stdin,
+            replies,
+            next_id: 0,
+        };
         server.request(
             "initialize",
             json!({"protocolVersion": "2024-11-05", "capabilities": {},
@@ -2208,7 +3010,13 @@ impl StdioServer {
         let result = &reply["result"];
         let text = result["content"]
             .as_array()
-            .map(|items| items.iter().filter_map(|item| item["text"].as_str()).collect::<Vec<_>>().join("\n"))
+            .map(|items| {
+                items
+                    .iter()
+                    .filter_map(|item| item["text"].as_str())
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            })
             .unwrap_or_default();
         if result["isError"] == json!(true) {
             Err(text)
@@ -2253,11 +3061,17 @@ async fn no_tool_says_it_plays_a_recording_back_without_the_game_seeing_it() {
     let mut server = StdioServer::start(port);
 
     let x_when_recording_began = mover_x(&tools).await;
-    if server.call_tool("replay", json!({"action": "record", "sample_rate": 20.0})).is_err() {
+    if server
+        .call_tool("replay", json!({"action": "record", "sample_rate": 20.0}))
+        .is_err()
+    {
         return; // Refused: nothing was claimed about the game.
     }
     tokio::time::sleep(Duration::from_millis(1000)).await;
-    if server.call_tool("replay", json!({"action": "stop"})).is_err() {
+    if server
+        .call_tool("replay", json!({"action": "stop"}))
+        .is_err()
+    {
         return;
     }
     let x_when_recording_stopped = mover_x(&tools).await;
@@ -2290,7 +3104,8 @@ async fn detect_anomaly(tools: &BevyDebuggerTools, request: Value) -> Value {
         .await
         .expect("the detect_anomaly tool returns a result");
     let text = text_of(&result);
-    serde_json::from_str(&text).unwrap_or_else(|e| panic!("detect_anomaly returned non-JSON ({e}): {text}"))
+    serde_json::from_str(&text)
+        .unwrap_or_else(|e| panic!("detect_anomaly returned non-JSON ({e}): {text}"))
 }
 
 /// `detect` returned `anomalies: []` and `entities_analyzed: N` for a game in which no detector
@@ -2304,31 +3119,80 @@ async fn detect_anomaly_reports_what_the_detectors_could_not_read_in_the_fixture
     let port = start_fixture();
     let tools = tools_for(port);
     wait_until_ready(&tools).await;
-    let everything = brp(&tools, json!({"method": "world.query", "params": {"data": {"components": []}}})).await;
-    let entities_in_the_game = everything.as_array().expect("world.query returns rows").len() as u64;
+    let everything = brp(
+        &tools,
+        json!({"method": "world.query", "params": {"data": {"components": []}}}),
+    )
+    .await;
+    let entities_in_the_game = everything
+        .as_array()
+        .expect("world.query returns rows")
+        .len() as u64;
 
     let mut held = Vec::new();
     let mut frames_seen: Vec<u64> = Vec::new();
     for call in 1..=2u64 {
         let reply = detect_anomaly(&tools, json!({"action": "detect"})).await;
-        assert_eq!(reply["summary"]["entities_read"], entities_in_the_game, "{reply}");
+        assert_eq!(
+            reply["summary"]["entities_read"], entities_in_the_game,
+            "{reply}"
+        );
         let (from, until) = (reply["frame"].as_u64(), reply["frame_until"].as_u64());
-        assert!(from.is_some() && until >= from, "the detection says which frames it was read between: {reply}");
+        assert!(
+            from.is_some() && until >= from,
+            "the detection says which frames it was read between: {reply}"
+        );
         if let Some(previous) = frames_seen.last() {
-            assert!(from.unwrap() > *previous, "a later call is on a later frame: {reply}");
+            assert!(
+                from.unwrap() > *previous,
+                "a later call is on a later frame: {reply}"
+            );
         }
         frames_seen.push(from.unwrap());
-        assert_eq!(reply["anomalies"], json!([]), "the fixture is steady: {reply}");
-        let detectors = reply["detectors"].as_array().expect("coverage per detector");
-        let named = |name: &str| detectors.iter().find(|d| d["detector"] == name).unwrap_or_else(|| panic!("{name}: {reply}"));
+        assert_eq!(
+            reply["anomalies"],
+            json!([]),
+            "the fixture is steady: {reply}"
+        );
+        let detectors = reply["detectors"]
+            .as_array()
+            .expect("coverage per detector");
+        let named = |name: &str| {
+            detectors
+                .iter()
+                .find(|d| d["detector"] == name)
+                .unwrap_or_else(|| panic!("{name}: {reply}"))
+        };
         for name in ["PhysicsDetector", "ConsistencyDetector"] {
-            assert_eq!(named(name)["examined"], 0, "the fixture has nothing {name} reads: {reply}");
-            assert!(named(name)["status"].as_str().unwrap().starts_with("not evaluated"), "{reply}");
+            assert_eq!(
+                named(name)["examined"],
+                0,
+                "the fixture has nothing {name} reads: {reply}"
+            );
+            assert!(
+                named(name)["status"]
+                    .as_str()
+                    .unwrap()
+                    .starts_with("not evaluated"),
+                "{reply}"
+            );
         }
-        let performance = named("PerformanceDetector")["status"].as_str().unwrap().to_string();
-        assert!(performance.contains(&format!("{call} of the 10 samples")), "call {call}: {performance}");
+        let performance = named("PerformanceDetector")["status"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        assert!(
+            performance.contains(&format!("{call} of the 10 samples")),
+            "call {call}: {performance}"
+        );
         held.push(performance);
-        assert!(reply["note"].as_str().unwrap().contains("says nothing about the game"), "{reply}");
+        assert!(
+            reply["note"]
+                .as_str()
+                .unwrap()
+                .contains("says nothing about the game"),
+            "{reply}"
+        );
     }
     assert_ne!(held[0], held[1], "each call adds one sample");
 }
@@ -2346,22 +3210,34 @@ async fn observe_brackets_the_frame_every_read_was_taken_on() {
     let (mut lowest, mut highest) = (i64::MIN, i64::MAX);
     let mut firsts = Vec::new();
     for _ in 0..10 {
-        let (text, failed) = observe(&tools, "find entities with component fixture_game::Spinner").await;
+        let (text, failed) =
+            observe(&tools, "find entities with component fixture_game::Spinner").await;
         assert!(!failed, "{text}");
-        let reply: Value = serde_json::from_str(&text).unwrap_or_else(|e| panic!("observe returned non-JSON ({e}): {text}"));
+        let reply: Value = serde_json::from_str(&text)
+            .unwrap_or_else(|e| panic!("observe returned non-JSON ({e}): {text}"));
         let counted = reply["result"][0]["components"]["fixture_game::Spinner"]["frames"]
             .as_i64()
             .unwrap_or_else(|| panic!("no spinner frame counter in: {text}"));
-        let from = reply["frame"].as_i64().unwrap_or_else(|| panic!("the reply carries no frame: {text}"));
-        let until = reply["frame_until"].as_i64().unwrap_or_else(|| panic!("the reply carries no frame_until: {text}"));
+        let from = reply["frame"]
+            .as_i64()
+            .unwrap_or_else(|| panic!("the reply carries no frame: {text}"));
+        let until = reply["frame_until"]
+            .as_i64()
+            .unwrap_or_else(|| panic!("the reply carries no frame_until: {text}"));
         assert!(from <= until, "bracket reversed: {text}");
         lowest = lowest.max(counted - until);
         highest = highest.min(counted - from);
         firsts.push(from);
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
-    assert!(lowest <= highest, "no constant offset fits every bracket ({lowest} > {highest})");
-    assert!(firsts.windows(2).all(|w| w[0] < w[1]), "reads 100 ms apart are on later frames: {firsts:?}");
+    assert!(
+        lowest <= highest,
+        "no constant offset fits every bracket ({lowest} > {highest})"
+    );
+    assert!(
+        firsts.windows(2).all(|w| w[0] < w[1]),
+        "reads 100 ms apart are on later frames: {firsts:?}"
+    );
 }
 
 /// The MCP client starts the server with the agent's session, and the game starts later. The
@@ -2376,11 +3252,23 @@ async fn tools_answer_as_soon_as_the_game_is_up_not_after_the_next_heartbeat() {
     let _turn = EXPERIMENT_TURN.lock().await;
     let port = free_port();
     // Clients that have never seen the game, as in a server started before it.
-    let tools = [tools_for(port), tools_for(port), tools_for(port), tools_for(port)];
+    let tools = [
+        tools_for(port),
+        tools_for(port),
+        tools_for(port),
+        tools_for(port),
+    ];
 
     // Before the game exists the refusal is true.
-    let (text, _) = observe(&tools[0], "find entities with component fixture_game::Crate").await;
-    assert!(text.contains("not connected"), "no game is running yet: {text}");
+    let (text, _) = observe(
+        &tools[0],
+        "find entities with component fixture_game::Crate",
+    )
+    .await;
+    assert!(
+        text.contains("not connected"),
+        "no game is running yet: {text}"
+    );
 
     std::thread::spawn(move || {
         fixture_game::build_app(port, fixture_game::DEFAULT_FPS).run();
@@ -2401,7 +3289,8 @@ async fn tools_answer_as_soon_as_the_game_is_up_not_after_the_next_heartbeat() {
         text_of(
             &tools[1]
                 .detect_anomaly(Parameters(
-                    serde_json::from_value(json!({"action": "detect"})).expect("the request deserialises"),
+                    serde_json::from_value(json!({"action": "detect"}))
+                        .expect("the request deserialises"),
                 ))
                 .await
                 .expect("detect_anomaly returns a result"),
@@ -2409,7 +3298,8 @@ async fn tools_answer_as_soon_as_the_game_is_up_not_after_the_next_heartbeat() {
         text_of(
             &tools[2]
                 .experiment(Parameters(
-                    serde_json::from_value(json!({"action": "undo"})).expect("the request deserialises"),
+                    serde_json::from_value(json!({"action": "undo"}))
+                        .expect("the request deserialises"),
                 ))
                 .await
                 .expect("experiment returns a result"),
@@ -2427,7 +3317,13 @@ async fn tools_answer_as_soon_as_the_game_is_up_not_after_the_next_heartbeat() {
                 .expect("hypothesis returns a result"),
         ),
     ];
-    for (tool, text) in ["observe", "detect_anomaly", "experiment", "hypothesis"].iter().zip(&asked) {
-        assert!(!text.contains("not connected"), "{tool} said the game was not connected while it answered: {text}");
+    for (tool, text) in ["observe", "detect_anomaly", "experiment", "hypothesis"]
+        .iter()
+        .zip(&asked)
+    {
+        assert!(
+            !text.contains("not connected"),
+            "{tool} said the game was not connected while it answered: {text}"
+        );
     }
 }

@@ -7,7 +7,7 @@
 
 use bevy::prelude::*;
 use bevy::remote::BrpResult;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// BRP handler: `bevy_fairy/quit`.
 pub(crate) fn handle_quit(In(_): In<Option<Value>>, mut exit: MessageWriter<AppExit>) -> BrpResult {

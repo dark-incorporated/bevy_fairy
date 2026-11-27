@@ -1,4 +1,4 @@
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
@@ -61,7 +61,9 @@ impl Standing {
 
     /// Put what the comparison found into the reply of an operation that went ahead.
     fn annotate(self, reply: &mut Value, url: &str) {
-        let Some(fields) = reply.as_object_mut() else { return };
+        let Some(fields) = reply.as_object_mut() else {
+            return;
+        };
         match self {
             Standing::Stale { entries } => {
                 fields.insert(
@@ -136,10 +138,14 @@ fn standing_of(recorded: &Recorded, entries: usize, now: &GameName) -> Standing 
         (_, Recorded::Game(_), Err(now)) => Standing::Unconfirmed(now.why.clone()),
         // The game that ran the actions answered without naming itself and a game that names itself
         // answers now: a process does not gain a plugin, so it is another one.
-        (_, Recorded::Unverifiable(then), Ok(_)) if then.answered_without_a_name => Standing::Stale { entries },
+        (_, Recorded::Unverifiable(then), Ok(_)) if then.answered_without_a_name => {
+            Standing::Stale { entries }
+        }
         (_, Recorded::Unverifiable(then), _) => Standing::Unverified(then.why.clone()),
         // Actions on record against no game cannot happen: `adopt` runs before every action.
-        (_, Recorded::Nothing, _) => Standing::Unverified("the history records no game".to_string()),
+        (_, Recorded::Nothing, _) => {
+            Standing::Unverified("the history records no game".to_string())
+        }
     }
 }
 
@@ -215,8 +221,10 @@ async fn handle_execute(arguments: Value, brp_client: Arc<RwLock<BrpClient>>) ->
             .map_err(|e| Error::Validation(format!("Failed to parse actions: {e}")))?
     } else {
         // Single action
-        vec![serde_json::from_value(actions_json.clone())
-            .map_err(|e| Error::Validation(format!("Failed to parse action: {e}")))?]
+        vec![
+            serde_json::from_value(actions_json.clone())
+                .map_err(|e| Error::Validation(format!("Failed to parse action: {e}")))?,
+        ]
     };
 
     if actions.is_empty() {
@@ -348,9 +356,14 @@ async fn handle_history(brp_client: Arc<RwLock<BrpClient>>) -> Result<Value> {
         },
         "timestamp": chrono::Utc::now().to_rfc3339()
     });
-    if let (Standing::Unconfirmed(why) | Standing::Unverified(why), Some(fields)) = (&standing, reply.as_object_mut()) {
+    if let (Standing::Unconfirmed(why) | Standing::Unverified(why), Some(fields)) =
+        (&standing, reply.as_object_mut())
+    {
         if state_guard.executor.entry_count() > 0 {
-            fields.insert("game_instance_unverified".to_string(), Value::from(why.as_str()));
+            fields.insert(
+                "game_instance_unverified".to_string(),
+                Value::from(why.as_str()),
+            );
         }
     }
     Ok(reply)
@@ -379,8 +392,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_handle_without_connection() {
-        let config = Config { mcp_port: 3000, ..Config::default() };
-        let brp_client = Arc::new(RwLock::new(crate::server::brp_client::BrpClient::new(&config)));
+        let config = Config {
+            mcp_port: 3000,
+            ..Config::default()
+        };
+        let brp_client = Arc::new(RwLock::new(crate::server::brp_client::BrpClient::new(
+            &config,
+        )));
 
         let args = json!({
             "action": "execute",
@@ -393,8 +411,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_handle_unknown_action() {
-        let config = Config { mcp_port: 3000, ..Config::default() };
-        let brp_client = Arc::new(RwLock::new(crate::server::brp_client::BrpClient::new(&config)));
+        let config = Config {
+            mcp_port: 3000,
+            ..Config::default()
+        };
+        let brp_client = Arc::new(RwLock::new(crate::server::brp_client::BrpClient::new(
+            &config,
+        )));
 
         let args = json!({
             "action": "unknown"
@@ -406,8 +429,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_handle_history() {
-        let config = Config { mcp_port: 3000, ..Config::default() };
-        let brp_client = Arc::new(RwLock::new(crate::server::brp_client::BrpClient::new(&config)));
+        let config = Config {
+            mcp_port: 3000,
+            ..Config::default()
+        };
+        let brp_client = Arc::new(RwLock::new(crate::server::brp_client::BrpClient::new(
+            &config,
+        )));
 
         let args = json!({
             "action": "history"
@@ -420,8 +448,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_handle_clear_history() {
-        let config = Config { mcp_port: 3000, ..Config::default() };
-        let brp_client = Arc::new(RwLock::new(crate::server::brp_client::BrpClient::new(&config)));
+        let config = Config {
+            mcp_port: 3000,
+            ..Config::default()
+        };
+        let brp_client = Arc::new(RwLock::new(crate::server::brp_client::BrpClient::new(
+            &config,
+        )));
 
         let args = json!({
             "action": "clear_history"
@@ -436,7 +469,10 @@ mod tests {
     }
 
     fn unnamed(why: &str, answered_without_a_name: bool) -> Unnamed {
-        Unnamed { why: why.to_string(), answered_without_a_name }
+        Unnamed {
+            why: why.to_string(),
+            answered_without_a_name,
+        }
     }
 
     #[test]
@@ -444,13 +480,19 @@ mod tests {
         let same = Ok("a".to_string());
         let other = Ok("b".to_string());
         assert_eq!(standing_of(&game("a"), 3, &same), Standing::Current);
-        assert_eq!(standing_of(&game("a"), 3, &other), Standing::Stale { entries: 3 });
+        assert_eq!(
+            standing_of(&game("a"), 3, &other),
+            Standing::Stale { entries: 3 }
+        );
     }
 
     #[test]
     fn a_game_that_cannot_be_asked_leaves_a_named_history_unconfirmed_not_current() {
         let silent = Err(unnamed("no answer", false));
-        assert_eq!(standing_of(&game("a"), 1, &silent), Standing::Unconfirmed("no answer".to_string()));
+        assert_eq!(
+            standing_of(&game("a"), 1, &silent),
+            Standing::Unconfirmed("no answer".to_string())
+        );
     }
 
     #[test]
@@ -468,23 +510,37 @@ mod tests {
     /// A process does not gain a plugin: the game that answered with no `instance` cannot be the
     /// one that names itself now.
     #[test]
-    fn a_history_recorded_against_a_game_that_answered_without_a_name_is_stale_for_one_that_names_itself() {
+    fn a_history_recorded_against_a_game_that_answered_without_a_name_is_stale_for_one_that_names_itself()
+     {
         let recorded = Recorded::Unverifiable(unnamed("no plugin", true));
-        assert_eq!(standing_of(&recorded, 2, &Ok("a".to_string())), Standing::Stale { entries: 2 });
+        assert_eq!(
+            standing_of(&recorded, 2, &Ok("a".to_string())),
+            Standing::Stale { entries: 2 }
+        );
     }
 
     /// A game that was not asked successfully says nothing about itself, so a game that names
     /// itself later may be the same one.
     #[test]
-    fn a_history_recorded_while_the_game_could_not_be_asked_stays_unverified_for_one_that_names_itself() {
+    fn a_history_recorded_while_the_game_could_not_be_asked_stays_unverified_for_one_that_names_itself()
+     {
         let recorded = Recorded::Unverifiable(unnamed("no answer", false));
-        assert_eq!(standing_of(&recorded, 2, &Ok("a".to_string())), Standing::Unverified("no answer".to_string()));
+        assert_eq!(
+            standing_of(&recorded, 2, &Ok("a".to_string())),
+            Standing::Unverified("no answer".to_string())
+        );
     }
 
     #[test]
     fn an_empty_history_has_nothing_to_be_stale_and_says_when_the_game_cannot_name_itself() {
-        assert_eq!(standing_of(&game("a"), 0, &Ok("b".to_string())), Standing::Current);
-        assert_eq!(standing_of(&Recorded::Nothing, 0, &Ok("b".to_string())), Standing::Current);
+        assert_eq!(
+            standing_of(&game("a"), 0, &Ok("b".to_string())),
+            Standing::Current
+        );
+        assert_eq!(
+            standing_of(&Recorded::Nothing, 0, &Ok("b".to_string())),
+            Standing::Current
+        );
         assert_eq!(
             standing_of(&Recorded::Nothing, 0, &Err(unnamed("no plugin", true))),
             Standing::Unverified("no plugin".to_string())

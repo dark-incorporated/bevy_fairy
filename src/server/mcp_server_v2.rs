@@ -35,11 +35,11 @@ impl McpServerV2 {
             tools,
         })
     }
-    
+
     /// Run the server in stdio mode for Claude Code
     pub async fn run_stdio(self) -> Result<()> {
         info!("Starting MCP server in stdio mode for Claude Code integration");
-        
+
         // Register the core BRP handler. A missing game is not fatal: the heartbeat below reports it.
         {
             let client = self.brp_client.read().await;
@@ -47,7 +47,7 @@ impl McpServerV2 {
                 warn!("bevy-fairy: BRP client init failed: {e}; tools will retry");
             }
         }
-        
+
         // Keep the connection state current in the background. Each probe is one HTTP request made under
         // the read lock, so tool calls never wait behind a retry sleep. Log only when the state changes.
         let brp_client = self.brp_client.clone();
@@ -73,16 +73,16 @@ impl McpServerV2 {
                 tokio::time::sleep(tokio::time::Duration::from_secs(30)).await;
             }
         });
-        
+
         // Setup signal handlers for graceful shutdown
         let (shutdown_tx, mut shutdown_rx) = tokio::sync::mpsc::channel(1);
-        
+
         // Handle SIGTERM and SIGINT
         tokio::spawn(async move {
             #[cfg(unix)]
             {
-                use tokio::signal::unix::{signal, SignalKind};
-                
+                use tokio::signal::unix::{SignalKind, signal};
+
                 let mut sigterm = match signal(SignalKind::terminate()) {
                     Ok(sig) => sig,
                     Err(e) => {
@@ -100,13 +100,13 @@ impl McpServerV2 {
                         return;
                     }
                 };
-                
+
                 tokio::select! {
                     _ = sigterm.recv() => {
                         info!("Received SIGTERM, shutting down gracefully");
                     }
                     _ = sigint.recv() => {
-                        info!("Received SIGINT, shutting down gracefully");  
+                        info!("Received SIGINT, shutting down gracefully");
                     }
                 }
             }
@@ -118,16 +118,16 @@ impl McpServerV2 {
                 }
                 info!("Received Ctrl-C, shutting down gracefully");
             }
-            
+
             let _ = shutdown_tx.send(()).await;
         });
-        
+
         info!("MCP stdio transport starting - ready for Claude Code connection");
-        
+
         // Create stdio transport
         let stdin = tokio::io::stdin();
         let stdout = tokio::io::stdout();
-        
+
         // Serve the tool router over stdio. Stdio ends when the client disconnects.
         tokio::select! {
             result = serve_server((*self.tools).clone(), (stdin, stdout)) => {
@@ -166,15 +166,20 @@ impl McpServerV2 {
             }
         }
     }
-    
+
     /// Run the server in TCP mode for background operation
     pub async fn run_tcp(self) -> Result<()> {
-        info!("Starting MCP server in TCP mode on port {}", self.config.mcp_port);
-        
+        info!(
+            "Starting MCP server in TCP mode on port {}",
+            self.config.mcp_port
+        );
+
         // For now, TCP mode is not implemented
         // You can use stdio mode instead
         error!("TCP mode not implemented, use stdio mode");
-        Err(crate::server::error::Error::DebugError("TCP mode not implemented".to_string()))
+        Err(crate::server::error::Error::DebugError(
+            "TCP mode not implemented".to_string(),
+        ))
     }
 }
 

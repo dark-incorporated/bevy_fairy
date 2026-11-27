@@ -10,11 +10,11 @@
 
 use std::sync::{Arc, Mutex};
 
-use axum::{extract::State, routing::post, Json, Router};
+use axum::{Json, Router, extract::State, routing::post};
 use bevy_fairy::server::brp_client::BrpClient;
 use bevy_fairy::server::config::Config;
 use bevy_fairy::server::recording_system::RecordingBuffer;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use tokio::net::TcpListener;
 use tokio::sync::RwLock;
 
@@ -28,7 +28,11 @@ type SharedGame = Arc<Mutex<FakeGame>>;
 async fn answer(State(game): State<SharedGame>, body: String) -> Json<Value> {
     let request: Value = serde_json::from_str(&body).expect("the client sends JSON");
     let id = request.get("id").cloned().unwrap_or(Value::Null);
-    let method = request.get("method").and_then(Value::as_str).unwrap_or_default().to_string();
+    let method = request
+        .get("method")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_string();
 
     {
         let mut game = game.lock().expect("fake game lock");
@@ -53,7 +57,9 @@ async fn answer(State(game): State<SharedGame>, body: String) -> Json<Value> {
 }
 
 async fn start_fake_game(game: SharedGame) -> u16 {
-    let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind the fake game port");
+    let listener = TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("bind the fake game port");
     let port = listener.local_addr().expect("fake game address").port();
     let app = Router::new().route("/", post(answer)).with_state(game);
     tokio::spawn(async move {
@@ -78,11 +84,15 @@ async fn a_recorded_frame_holds_the_games_entities() {
     let port = start_fake_game(game.clone()).await;
     let client = client_for(port);
 
-    let mut buffer = RecordingBuffer::new(bevy_fairy::server::recording_system::RecordingConfig::default());
+    let mut buffer =
+        RecordingBuffer::new(bevy_fairy::server::recording_system::RecordingConfig::default());
     buffer.start_recording();
 
     let mut client_guard = client.write().await;
-    buffer.record_frame(&mut client_guard).await.expect("the frame is recorded");
+    buffer
+        .record_frame(&mut client_guard)
+        .await
+        .expect("the frame is recorded");
 
     let frames = buffer.get_frames();
     assert_eq!(frames.len(), 1, "one frame was recorded");
@@ -92,8 +102,14 @@ async fn a_recorded_frame_holds_the_games_entities() {
         2,
         "the frame must hold the game's entities, not an empty map; frame: {frame:?}"
     );
-    assert!(frame.entities.contains_key(&1), "entity 1 must be in the frame");
-    assert!(frame.entities.contains_key(&2), "entity 2 must be in the frame");
+    assert!(
+        frame.entities.contains_key(&1),
+        "entity 1 must be in the frame"
+    );
+    assert!(
+        frame.entities.contains_key(&2),
+        "entity 2 must be in the frame"
+    );
     assert_eq!(
         frame.entities[&1].components.get("Transform"),
         Some(&json!({"x": 1.0})),
@@ -116,11 +132,15 @@ async fn a_frame_says_that_events_were_not_captured() {
     let port = start_fake_game(game.clone()).await;
     let client = client_for(port);
 
-    let mut buffer = RecordingBuffer::new(bevy_fairy::server::recording_system::RecordingConfig::default());
+    let mut buffer =
+        RecordingBuffer::new(bevy_fairy::server::recording_system::RecordingConfig::default());
     buffer.start_recording();
 
     let mut client_guard = client.write().await;
-    buffer.record_frame(&mut client_guard).await.expect("the frame is recorded");
+    buffer
+        .record_frame(&mut client_guard)
+        .await
+        .expect("the frame is recorded");
 
     let frames = buffer.get_frames();
     let frame = &frames[0];

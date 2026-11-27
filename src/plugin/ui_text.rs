@@ -16,13 +16,11 @@
 use bevy::prelude::*;
 use bevy::text::TextElement;
 use bevy::ui::widget::{Text, TextUiReader};
-use bevy::ui::{
-    CalculatedClip, ComputedNode, ComputedUiRenderTargetInfo, UiGlobalTransform,
-};
+use bevy::ui::{CalculatedClip, ComputedNode, ComputedUiRenderTargetInfo, UiGlobalTransform};
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
-use crate::plugin::commands::{add_builtin_command, DebugCommandInfo};
+use crate::plugin::commands::{DebugCommandInfo, add_builtin_command};
 use crate::plugin::ready::FrameTicks;
 
 /// A text colour with alpha at or below this is treated as not drawn. Zero, because a toast that
@@ -126,7 +124,9 @@ fn overlaps(a: Rect, b: Rect) -> bool {
 /// Whether the node's box lies entirely outside what an ancestor's `Overflow` lets through.
 fn clipped_away(clip: Option<&CalculatedClip>, transform: &UiGlobalTransform, half: Vec2) -> bool {
     let Some(clip) = clip else { return false };
-    let Some(rects) = clip.rects() else { return true };
+    let Some(rects) = clip.rects() else {
+        return true;
+    };
     let affine = transform.affine();
     rects.iter().any(|clip_rect| {
         let corners = [
@@ -135,7 +135,11 @@ fn clipped_away(clip: Option<&CalculatedClip>, transform: &UiGlobalTransform, ha
             Vec2::new(half.x, half.y),
             Vec2::new(-half.x, half.y),
         ]
-        .map(|c| clip_rect.world_to_clip_local.transform_point2(affine.transform_point2(c)));
+        .map(|c| {
+            clip_rect
+                .world_to_clip_local
+                .transform_point2(affine.transform_point2(c))
+        });
         let mut lo = corners[0];
         let mut hi = corners[0];
         for c in &corners[1..] {
@@ -160,15 +164,18 @@ struct Row {
 fn handle_ui_text(
     In(params): In<UiTextParams>,
     mut reader: TextUiReader,
-    nodes: Query<(
-        Entity,
-        &ComputedNode,
-        &UiGlobalTransform,
-        &InheritedVisibility,
-        &ComputedUiRenderTargetInfo,
-        Option<&CalculatedClip>,
-        Option<&Name>,
-    ), With<Text>>,
+    nodes: Query<
+        (
+            Entity,
+            &ComputedNode,
+            &UiGlobalTransform,
+            &InheritedVisibility,
+            &ComputedUiRenderTargetInfo,
+            Option<&CalculatedClip>,
+            Option<&Name>,
+        ),
+        With<Text>,
+    >,
     names: Query<(Option<&Name>, Option<&ChildOf>)>,
     ticks: Res<FrameTicks>,
 ) -> Result<Value, String> {
@@ -176,7 +183,11 @@ fn handle_ui_text(
     if limit == 0 {
         return Err("limit must be >= 1".to_string());
     }
-    if params.region.as_ref().is_some_and(|r| r.width == 0 || r.height == 0) {
+    if params
+        .region
+        .as_ref()
+        .is_some_and(|r| r.width == 0 || r.height == 0)
+    {
         return Err("region width and height must both be non-zero".to_string());
     }
     // Summed as f32, not u32: `x + width` past `u32::MAX` panicked a debug build and wrapped to a
@@ -191,14 +202,21 @@ fn handle_ui_text(
         let mut text = String::new();
         let mut any_alpha = false;
         for (_, _, element) in reader.iter(entity) {
-            if let TextElement::Text { text: piece, color, .. } = element {
+            if let TextElement::Text {
+                text: piece, color, ..
+            } = element
+            {
                 text.push_str(piece);
                 if !piece.is_empty() && color.alpha() > MIN_ALPHA {
                     any_alpha = true;
                 }
             }
         }
-        if params.contains.as_ref().is_some_and(|needle| !text.contains(needle.as_str())) {
+        if params
+            .contains
+            .as_ref()
+            .is_some_and(|needle| !text.contains(needle.as_str()))
+        {
             continue;
         }
 
@@ -232,7 +250,11 @@ fn handle_ui_text(
         // A visible node's rect is what the player sees, so it is cut to the target; that is also
         // what makes it, as `[x, y, x + width, y + height]`, a valid screenshot `rect`. A hidden
         // node keeps its raw box.
-        let shown = if hidden.is_none() { bounds.intersect(target_rect) } else { bounds };
+        let shown = if hidden.is_none() {
+            bounds.intersect(target_rect)
+        } else {
+            bounds
+        };
         if region.is_some_and(|region| !overlaps(shown, region)) {
             continue;
         }
@@ -242,12 +264,17 @@ fn handle_ui_text(
         let y1 = shown.max.y.ceil() as i64;
 
         let mut ancestors = Vec::new();
-        let mut at = names.get(entity).ok().and_then(|(_, parent)| parent.map(ChildOf::parent));
+        let mut at = names
+            .get(entity)
+            .ok()
+            .and_then(|(_, parent)| parent.map(ChildOf::parent));
         while let Some(parent) = at {
             if ancestors.len() == MAX_ANCESTORS {
                 break;
             }
-            let Ok((name, next)) = names.get(parent) else { break };
+            let Ok((name, next)) = names.get(parent) else {
+                break;
+            };
             if let Some(name) = name {
                 ancestors.push(name.as_str().to_string());
             }
@@ -274,7 +301,10 @@ fn handle_ui_text(
     // reply, so say so and put the size on each node instead of reporting one that is wrong.
     let single = rows.windows(2).all(|w| w[0].target == w[1].target);
     let (target_size, scale_factor) = match rows.first() {
-        Some(first) if single => (json!([first.target.0.x, first.target.0.y]), json!(first.target.1)),
+        Some(first) if single => (
+            json!([first.target.0.x, first.target.0.y]),
+            json!(first.target.1),
+        ),
         _ => (Value::Null, Value::Null),
     };
 

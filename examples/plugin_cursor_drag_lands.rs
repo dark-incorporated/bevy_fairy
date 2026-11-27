@@ -21,9 +21,9 @@
 //! *physical* pointer, which would drag the mouse out from under whoever is at the machine. See
 //! `DebugCursor`'s own docs for the measurement and the line it was read from.
 
-use bevy::prelude::*;
-use bevy_fairy::{apply_pending_input, DebugCursor, InputAction, PendingInput};
 use bevy::input::InputSystems;
+use bevy::prelude::*;
+use bevy_fairy::{DebugCursor, InputAction, PendingInput, apply_pending_input};
 
 /// A toy "box select": where the drag started, where it is now, and whether it has finished.
 #[derive(Resource, Default)]

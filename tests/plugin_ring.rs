@@ -8,7 +8,7 @@ use bevy::prelude::*;
 use bevy::remote::{BrpResult, RemoteMethodSystemId, RemoteMethods};
 use bevy::time::TimeUpdateStrategy;
 use bevy_fairy::DebuggerPlugin;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 #[derive(Component, Reflect, Default)]
 #[reflect(Component)]
@@ -24,8 +24,14 @@ fn bump(mut counters: Query<&mut Counter>) {
 
 fn app() -> App {
     let mut app = App::new();
-    app.add_plugins((MinimalPlugins, bevy::input::InputPlugin, DebuggerPlugin::default()));
-    app.insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_millis(16)));
+    app.add_plugins((
+        MinimalPlugins,
+        bevy::input::InputPlugin,
+        DebuggerPlugin::default(),
+    ));
+    app.insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_millis(
+        16,
+    )));
     app.register_type::<Counter>();
     app.world_mut().spawn(Counter(0));
     app.add_systems(Update, bump);
@@ -34,11 +40,17 @@ fn app() -> App {
 }
 
 fn ring(app: &mut App, params: Value) -> BrpResult {
-    let id = match app.world().resource::<RemoteMethods>().get("bevy_fairy/ring") {
+    let id = match app
+        .world()
+        .resource::<RemoteMethods>()
+        .get("bevy_fairy/ring")
+    {
         Some(RemoteMethodSystemId::Instant(id)) => *id,
         _ => panic!("bevy_fairy/ring is not registered"),
     };
-    app.world_mut().run_system_with(id, Some(params)).expect("handler runs")
+    app.world_mut()
+        .run_system_with(id, Some(params))
+        .expect("handler runs")
 }
 
 fn start(frames: usize) -> Value {
@@ -46,7 +58,9 @@ fn start(frames: usize) -> Value {
 }
 
 fn counter_in(sample: &Value) -> u64 {
-    sample["result"][0]["components"][PATH].as_u64().unwrap_or_else(|| panic!("no counter in {sample}"))
+    sample["result"][0]["components"][PATH]
+        .as_u64()
+        .unwrap_or_else(|| panic!("no counter in {sample}"))
 }
 
 #[test]
@@ -61,11 +75,23 @@ fn keeps_exactly_the_newest_frames_and_each_holds_its_own_frames_value() {
     assert_eq!(samples.len(), 5, "{dump}");
     assert_eq!(dump["evicted"], 7, "{dump}");
     assert_eq!(dump["recording"], true);
-    let frames: Vec<u64> = samples.iter().map(|s| s["frame"].as_u64().unwrap()).collect();
-    assert!(frames.windows(2).all(|w| w[1] == w[0] + 1), "frame gap: {frames:?}");
+    let frames: Vec<u64> = samples
+        .iter()
+        .map(|s| s["frame"].as_u64().unwrap())
+        .collect();
+    assert!(
+        frames.windows(2).all(|w| w[1] == w[0] + 1),
+        "frame gap: {frames:?}"
+    );
     // The counter rises by one per frame, so value - frame is constant across the buffer.
-    let offsets: Vec<i64> = samples.iter().map(|s| counter_in(s) as i64 - s["frame"].as_i64().unwrap()).collect();
-    assert!(offsets.iter().all(|o| *o == offsets[0]), "stale or skipped samples: {offsets:?}");
+    let offsets: Vec<i64> = samples
+        .iter()
+        .map(|s| counter_in(s) as i64 - s["frame"].as_i64().unwrap())
+        .collect();
+    assert!(
+        offsets.iter().all(|o| *o == offsets[0]),
+        "stale or skipped samples: {offsets:?}"
+    );
     assert_eq!(dump["newest_frame"], frames[4]);
 }
 
@@ -85,7 +111,10 @@ fn a_trigger_ends_the_buffer_on_the_frame_that_matched() {
     let last = samples.last().unwrap();
     assert_eq!(counter_in(last), 9, "{dump}");
     assert_eq!(dump["triggered_at_frame"], last["frame"], "{dump}");
-    assert_eq!(dump["newest_frame"], last["frame"], "recording went on past the trigger: {dump}");
+    assert_eq!(
+        dump["newest_frame"], last["frame"],
+        "recording went on past the trigger: {dump}"
+    );
 }
 
 #[test]
@@ -120,7 +149,10 @@ fn refuses_instead_of_recording_something_else() {
         ring(&mut app, bad.clone()).expect_err(&format!("accepted {bad}"));
     }
     let status = ring(&mut app, json!({"action": "dump"}));
-    assert!(status.is_err(), "a refused start must not leave a buffer behind");
+    assert!(
+        status.is_err(),
+        "a refused start must not leave a buffer behind"
+    );
 }
 
 /// A float component: `f32` fields serialize as JSON floats (`9.0`, `0.10000000149011612`), and a
@@ -140,8 +172,14 @@ fn rise(mut gauges: Query<&mut Gauge>) {
 /// A gauge holding `start`, which rises by 1.0 a frame when `rising`.
 fn gauge_app(start: f32, rising: bool) -> App {
     let mut app = App::new();
-    app.add_plugins((MinimalPlugins, bevy::input::InputPlugin, DebuggerPlugin::default()));
-    app.insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_millis(16)));
+    app.add_plugins((
+        MinimalPlugins,
+        bevy::input::InputPlugin,
+        DebuggerPlugin::default(),
+    ));
+    app.insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_millis(
+        16,
+    )));
     app.register_type::<Gauge>();
     app.world_mut().spawn(Gauge(start));
     if rising {
@@ -171,7 +209,11 @@ fn a_trigger_written_as_an_integer_matches_a_float_field_holding_that_number() {
     let dump = gauge_dump(&mut app, json!(9));
     assert_eq!(dump["recording"], false, "{dump}");
     let last = &dump["samples"][0];
-    assert_eq!(last["result"][0]["components"][GAUGE].as_f64(), Some(9.0), "{dump}");
+    assert_eq!(
+        last["result"][0]["components"][GAUGE].as_f64(),
+        Some(9.0),
+        "{dump}"
+    );
     assert_eq!(dump["triggered_at_frame"], last["frame"], "{dump}");
 }
 
@@ -201,5 +243,9 @@ fn a_trigger_does_not_fire_on_a_neighbouring_value_an_f32_cannot_tell_apart() {
     assert_eq!(dump["triggered_at_frame"], Value::Null, "{dump}");
     let mut app = gauge_app(0.0, false);
     let dump = gauge_dump(&mut app, json!(1e-50));
-    assert_eq!(dump["triggered_at_frame"], Value::Null, "an f32 underflow is not zero: {dump}");
+    assert_eq!(
+        dump["triggered_at_frame"],
+        Value::Null,
+        "an f32 underflow is not zero: {dump}"
+    );
 }

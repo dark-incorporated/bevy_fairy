@@ -35,14 +35,14 @@ use std::collections::VecDeque;
 use std::io::Cursor;
 
 use bevy::prelude::*;
-use bevy::remote::{error_codes, BrpError, BrpResult};
+use bevy::remote::{BrpError, BrpResult, error_codes};
 use bevy::render::view::window::screenshot::{Screenshot, ScreenshotCaptured};
 use bevy::window::PrimaryWindow;
-use image::{imageops::FilterType, ImageFormat};
+use image::{ImageFormat, imageops::FilterType};
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
-use crate::crop::{crop_view, CropRect};
+use crate::crop::{CropRect, crop_view};
 use crate::plugin::ready::FrameTicks;
 
 /// How many finished or pending captures [`Captures`] keeps. The oldest is dropped.
@@ -91,7 +91,13 @@ pub enum CaptureState {
     Pending,
     /// A finished capture. `width` x `height` is the PNG's size, after `rect` and `zoom`;
     /// `picture` is the size of the whole frame that was captured, before either.
-    Done { png: Vec<u8>, width: u32, height: u32, picture: [u32; 2], provenance: Provenance },
+    Done {
+        png: Vec<u8>,
+        width: u32,
+        height: u32,
+        picture: [u32; 2],
+        provenance: Provenance,
+    },
     Failed(String),
 }
 
@@ -148,7 +154,11 @@ enum Source {
 
 /// Build a `BrpError` for a malformed parameter payload.
 fn invalid_params(message: String) -> BrpError {
-    BrpError { code: error_codes::INVALID_PARAMS, message, data: None }
+    BrpError {
+        code: error_codes::INVALID_PARAMS,
+        message,
+        data: None,
+    }
 }
 
 /// BRP handler: `bevy_fairy/screenshot`.
@@ -163,7 +173,12 @@ pub fn handle_screenshot(
     let params: ScreenshotParams = match params {
         Some(p) => serde_json::from_value(p)
             .map_err(|e| invalid_params(format!("invalid screenshot params: {e}")))?,
-        None => ScreenshotParams { path: None, rect: None, zoom: 1.0, source: None },
+        None => ScreenshotParams {
+            path: None,
+            rect: None,
+            zoom: 1.0,
+            source: None,
+        },
     };
 
     let source = match params.source.as_deref() {
@@ -171,7 +186,11 @@ pub fn handle_screenshot(
         None => Source::Window,
         Some("offscreen") => Source::Offscreen,
         Some("window") => Source::Window,
-        Some(_) => return Err(invalid_params("source must be offscreen or window".to_string())),
+        Some(_) => {
+            return Err(invalid_params(
+                "source must be offscreen or window".to_string(),
+            ));
+        }
     };
 
     if !params.zoom.is_finite() || params.zoom <= 0.0 {
@@ -181,31 +200,31 @@ pub fn handle_screenshot(
         )));
     }
 
-    let screenshot = match source {
-        // Loudly, not with a window fallback: the host chose the view it wants captured.
-        Source::Offscreen => match target {
-            Some(target) => Screenshot::image(target.image.clone()),
-            None => {
-                return Err(BrpError {
+    let screenshot =
+        match source {
+            // Loudly, not with a window fallback: the host chose the view it wants captured.
+            Source::Offscreen => match target {
+                Some(target) => Screenshot::image(target.image.clone()),
+                None => return Err(BrpError {
                     code: error_codes::INTERNAL_ERROR,
-                    message: "no DebugCaptureTarget resource: the host must insert one with an Image a \
+                    message:
+                        "no DebugCaptureTarget resource: the host must insert one with an Image a \
                               camera renders to, or ask for source \"window\""
-                        .to_string(),
+                            .to_string(),
                     data: None,
-                })
+                }),
+            },
+            Source::Window => {
+                if windows.is_empty() {
+                    return Err(BrpError {
+                        code: error_codes::INTERNAL_ERROR,
+                        message: "no primary window to capture".to_string(),
+                        data: None,
+                    });
+                }
+                Screenshot::primary_window()
             }
-        },
-        Source::Window => {
-            if windows.is_empty() {
-                return Err(BrpError {
-                    code: error_codes::INTERNAL_ERROR,
-                    message: "no primary window to capture".to_string(),
-                    data: None,
-                });
-            }
-            Screenshot::primary_window()
-        }
-    };
+        };
 
     let id = captures.begin();
     let source_name = match source {
@@ -218,26 +237,51 @@ pub fn handle_screenshot(
     let rect = params.rect;
     let zoom = params.zoom;
 
-    commands.spawn(screenshot).observe(move |trigger: On<ScreenshotCaptured>, mut captures: ResMut<Captures>, ticks: Res<FrameTicks>| {
-        let provenance = Provenance { source: source_name, frame_requested, frame_captured: ticks.0 };
-        let state = match encode_capture(&trigger.image, rect, zoom) {
-            Ok(Encoded { png, width, height, picture }) => match path.as_deref() {
-                Some(p) => match std::fs::write(p, &png) {
-                    Ok(()) => {
-                        info!("bevy_fairy/screenshot: wrote {p}");
-                        CaptureState::Done { png, width, height, picture, provenance }
-                    }
-                    Err(e) => CaptureState::Failed(format!("could not write {p}: {e}")),
+    commands.spawn(screenshot).observe(
+        move |trigger: On<ScreenshotCaptured>,
+              mut captures: ResMut<Captures>,
+              ticks: Res<FrameTicks>| {
+            let provenance = Provenance {
+                source: source_name,
+                frame_requested,
+                frame_captured: ticks.0,
+            };
+            let state = match encode_capture(&trigger.image, rect, zoom) {
+                Ok(Encoded {
+                    png,
+                    width,
+                    height,
+                    picture,
+                }) => match path.as_deref() {
+                    Some(p) => match std::fs::write(p, &png) {
+                        Ok(()) => {
+                            info!("bevy_fairy/screenshot: wrote {p}");
+                            CaptureState::Done {
+                                png,
+                                width,
+                                height,
+                                picture,
+                                provenance,
+                            }
+                        }
+                        Err(e) => CaptureState::Failed(format!("could not write {p}: {e}")),
+                    },
+                    None => CaptureState::Done {
+                        png,
+                        width,
+                        height,
+                        picture,
+                        provenance,
+                    },
                 },
-                None => CaptureState::Done { png, width, height, picture, provenance },
-            },
-            Err(e) => CaptureState::Failed(e),
-        };
-        if let CaptureState::Failed(why) = &state {
-            error!("bevy_fairy/screenshot: capture {id} failed: {why}");
-        }
-        captures.finish(id, state);
-    });
+                Err(e) => CaptureState::Failed(e),
+            };
+            if let CaptureState::Failed(why) = &state {
+                error!("bevy_fairy/screenshot: capture {id} failed: {why}");
+            }
+            captures.finish(id, state);
+        },
+    );
 
     Ok(json!({ "id": id, "path": reported }))
 }
@@ -253,9 +297,16 @@ pub struct CaptureParams {
 pub(crate) fn handle_capture(In(params): In<Option<Value>>, captures: Res<Captures>) -> BrpResult {
     let params: CaptureParams = match params {
         Some(p) => serde_json::from_value(p).map_err(|e| {
-            invalid_params(format!("bevy_fairy/capture: {e}; example: {}", json!({"id": 1})))
+            invalid_params(format!(
+                "bevy_fairy/capture: {e}; example: {}",
+                json!({"id": 1})
+            ))
         })?,
-        None => return Err(invalid_params("bevy_fairy/capture needs {\"id\": n}".to_string())),
+        None => {
+            return Err(invalid_params(
+                "bevy_fairy/capture needs {\"id\": n}".to_string(),
+            ));
+        }
     };
     match captures.get(params.id) {
         None => Err(invalid_params(format!(
@@ -263,7 +314,13 @@ pub(crate) fn handle_capture(In(params): In<Option<Value>>, captures: Res<Captur
             params.id
         ))),
         Some(CaptureState::Pending) => Ok(json!({ "status": "pending" })),
-        Some(CaptureState::Done { png, width, height, picture, provenance }) => Ok(json!({
+        Some(CaptureState::Done {
+            png,
+            width,
+            height,
+            picture,
+            provenance,
+        }) => Ok(json!({
             "status": "done",
             "width": width,
             "height": height,
@@ -317,7 +374,12 @@ fn encode_capture(image: &Image, rect: Option<CropRect>, zoom: f32) -> Result<En
     let mut buf = Cursor::new(Vec::new());
     rgb.write_to(&mut buf, ImageFormat::Png)
         .map_err(|e| format!("could not encode the PNG: {e}"))?;
-    Ok(Encoded { png: buf.into_inner(), width, height, picture })
+    Ok(Encoded {
+        png: buf.into_inner(),
+        width,
+        height,
+        picture,
+    })
 }
 
 /// The size `zoom` makes of a `width` x `height` image, or why it is refused. Refused, not
@@ -385,10 +447,20 @@ mod tests {
         let mut world = World::new();
         let mut captures = Captures::default();
         let id = captures.begin();
-        let provenance = Provenance { source: "window", frame_requested: 40, frame_captured: 43 };
+        let provenance = Provenance {
+            source: "window",
+            frame_requested: 40,
+            frame_captured: 43,
+        };
         captures.finish(
             id,
-            CaptureState::Done { png: vec![1, 2, 3], width: 4, height: 5, picture: [64, 48], provenance },
+            CaptureState::Done {
+                png: vec![1, 2, 3],
+                width: 4,
+                height: 5,
+                picture: [64, 48],
+                provenance,
+            },
         );
         world.insert_resource(captures);
         let reply = world
@@ -399,7 +471,11 @@ mod tests {
         assert_eq!(reply["source"], "window");
         assert_eq!(reply["frame_requested"], 40);
         assert_eq!(reply["frame_captured"], 43);
-        assert_eq!(reply["picture"], json!([64, 48]), "the whole frame's size, beside the crop's");
+        assert_eq!(
+            reply["picture"],
+            json!([64, 48]),
+            "the whole frame's size, beside the crop's"
+        );
     }
 
     #[test]
@@ -410,11 +486,19 @@ mod tests {
         assert!(captures.get(ids[1]).is_none());
         assert_eq!(captures.get(ids[2]), Some(&CaptureState::Pending));
         captures.finish(ids[9], CaptureState::Failed("boom".into()));
-        assert_eq!(captures.get(ids[9]), Some(&CaptureState::Failed("boom".into())));
+        assert_eq!(
+            captures.get(ids[9]),
+            Some(&CaptureState::Failed("boom".into()))
+        );
     }
 
     fn black(width: u32, height: u32) -> Image {
-        Image::new_target_texture(width, height, bevy::render::render_resource::TextureFormat::Rgba8UnormSrgb, None)
+        Image::new_target_texture(
+            width,
+            height,
+            bevy::render::render_resource::TextureFormat::Rgba8UnormSrgb,
+            None,
+        )
     }
 
     /// A 64 x 48 frame whose every pixel differs, as the renderer hands it to the observer.
@@ -422,10 +506,16 @@ mod tests {
         use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
         let (width, height) = (64u32, 48u32);
         let data = (0..height)
-            .flat_map(|y| (0..width).flat_map(move |x| [x as u8 * 4, y as u8 * 5, (x ^ y) as u8, 255]))
+            .flat_map(|y| {
+                (0..width).flat_map(move |x| [x as u8 * 4, y as u8 * 5, (x ^ y) as u8, 255])
+            })
             .collect();
         Image::new(
-            Extent3d { width, height, depth_or_array_layers: 1 },
+            Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
             TextureDimension::D2,
             data,
             TextureFormat::Rgba8UnormSrgb,
@@ -434,7 +524,9 @@ mod tests {
     }
 
     fn rgba(png: &[u8]) -> image::RgbaImage {
-        image::load_from_memory_with_format(png, ImageFormat::Png).expect("a PNG").to_rgba8()
+        image::load_from_memory_with_format(png, ImageFormat::Png)
+            .expect("a PNG")
+            .to_rgba8()
     }
 
     /// Issue #15, acceptance 6: `rect` on the screenshot is `crop_png` over the picture the same
@@ -444,16 +536,30 @@ mod tests {
     fn a_screenshot_rect_is_the_crop_crop_png_makes_of_the_same_picture() {
         let frame = patterned();
         let whole = encode_capture(&frame, None, 1.0).expect("the whole frame encodes");
-        assert_eq!((whole.width, whole.height, whole.picture), (64, 48, [64, 48]));
+        assert_eq!(
+            (whole.width, whole.height, whole.picture),
+            (64, 48, [64, 48])
+        );
         for rect in [[8, 4, 40, 36], [0, 0, 64, 48], [63, 47, 64, 48]] {
             let shot = encode_capture(&frame, Some(rect), 1.0).expect("an inside rect crops");
             let crop = crate::crop_png(&whole.png, rect).expect("crop_png crops the same rect");
             assert_eq!([shot.width, shot.height], crop.size, "{rect:?}");
             assert_eq!(shot.picture, crop.picture, "{rect:?}");
-            assert_eq!(rgba(&shot.png), rgba(&crop.png), "{rect:?}: the same pixels");
+            assert_eq!(
+                rgba(&shot.png),
+                rgba(&crop.png),
+                "{rect:?}: the same pixels"
+            );
         }
-        for rect in [[0, 0, 0, 10], [10, 0, 5, 10], [-1, 0, 10, 10], [0, 0, 65, 10], [60, 40, 70, 50]] {
-            let refusal = encode_capture(&frame, Some(rect), 1.0).expect_err("refused, never clamped");
+        for rect in [
+            [0, 0, 0, 10],
+            [10, 0, 5, 10],
+            [-1, 0, 10, 10],
+            [0, 0, 65, 10],
+            [60, 40, 70, 50],
+        ] {
+            let refusal =
+                encode_capture(&frame, Some(rect), 1.0).expect_err("refused, never clamped");
             let same = crate::crop_png(&whole.png, rect).expect_err("crop_png refuses it too");
             assert_eq!(refusal, same, "{rect:?}");
         }
@@ -473,7 +579,11 @@ mod tests {
             )
             .expect("system runs")
             .expect_err("an unknown field is refused");
-        assert!(refusal.message.contains("region") && refusal.message.contains("rect"), "{}", refusal.message);
+        assert!(
+            refusal.message.contains("region") && refusal.message.contains("rect"),
+            "{}",
+            refusal.message
+        );
     }
 
     /// `zoom` had no upper bound: `{"zoom": 1e9}` asked `image::imageops::resize` for a 4e9 x 4e9
@@ -484,9 +594,16 @@ mod tests {
         // Absurd values reach the refusal and not an overflow or an allocation.
         encode_capture(&black(4, 4), None, 1e9).expect_err("1e9 is refused");
         encode_capture(&black(4, 4), None, f32::MAX).expect_err("f32::MAX is refused");
-        let refusal = encode_capture(&black(4, 4), None, 2500.0).expect_err("a 10000 x 10000 image is refused");
-        assert!(refusal.contains("zoom") && refusal.contains("10000x10000"), "{refusal}");
-        assert!(refusal.contains("rect"), "it says how to get the detail another way: {refusal}");
+        let refusal = encode_capture(&black(4, 4), None, 2500.0)
+            .expect_err("a 10000 x 10000 image is refused");
+        assert!(
+            refusal.contains("zoom") && refusal.contains("10000x10000"),
+            "{refusal}"
+        );
+        assert!(
+            refusal.contains("rect"),
+            "it says how to get the detail another way: {refusal}"
+        );
     }
 
     #[test]
@@ -495,8 +612,12 @@ mod tests {
         assert_eq!((encoded.width, encoded.height), (32, 32));
         let encoded = encode_capture(&black(4, 4), None, 0.5).expect("0.5x of 4x4");
         assert_eq!((encoded.width, encoded.height), (2, 2));
-        let encoded = encode_capture(&black(4, 4), Some([0, 0, 2, 1]), 16.0).expect("16x of a 2x1 crop");
-        assert_eq!((encoded.width, encoded.height, encoded.picture), (32, 16, [4, 4]));
+        let encoded =
+            encode_capture(&black(4, 4), Some([0, 0, 2, 1]), 16.0).expect("16x of a 2x1 crop");
+        assert_eq!(
+            (encoded.width, encoded.height, encoded.picture),
+            (32, 16, [4, 4])
+        );
     }
 
     /// A zoom out allocates less than the capture the game already holds, so it is never refused,
@@ -507,7 +628,12 @@ mod tests {
         assert_eq!(zoomed_size(7680, 4320, 0.001), Ok((8, 4)));
         assert_eq!(zoomed_size(4, 4, 8.0), Ok((32, 32)));
         assert_eq!(zoomed_size(1000, 1000, 4.0), Ok((4000, 4000)));
-        for (width, height, zoom) in [(1000, 1000, 4.5), (7680, 4320, 1.5), (4, 4, 1e9), (1, 1, f32::MAX)] {
+        for (width, height, zoom) in [
+            (1000, 1000, 4.5),
+            (7680, 4320, 1.5),
+            (4, 4, 1e9),
+            (1, 1, f32::MAX),
+        ] {
             let refusal = zoomed_size(width, height, zoom).expect_err("larger than 4096 x 4096");
             assert!(refusal.contains("rect"), "{refusal}");
         }

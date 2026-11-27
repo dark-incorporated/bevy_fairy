@@ -24,14 +24,14 @@
 //! - **Bevy 0.16 Compatible**: Uses latest Bevy reflection APIs
 
 #[cfg(feature = "bevy-reflection")]
+use ::serde::{Deserialize, Serialize};
+#[cfg(feature = "bevy-reflection")]
 use bevy::prelude::*;
 #[cfg(feature = "bevy-reflection")]
 use bevy::reflect::*;
-#[cfg(feature = "bevy-reflection")]
-use ::serde::{Deserialize, Serialize};
 #[cfg(not(feature = "bevy-reflection"))]
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::any::{Any, TypeId};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -137,10 +137,10 @@ pub struct InspectedValue {
 pub trait CustomInspector: Any + Send + Sync {
     /// Inspect a component value using custom logic
     fn inspect(&self, value: &ComponentValue, type_name: &str) -> Result<InspectedValue>;
-    
+
     /// Get the inspector name
     fn name(&self) -> &str;
-    
+
     /// Get supported type names
     fn supported_types(&self) -> Vec<String>;
 }
@@ -187,10 +187,10 @@ pub enum ChangeType {
 /// Severity of a detected change
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ChangeSeverity {
-    Trivial,   // Small numerical changes, formatting
-    Minor,     // Field value changes within expected ranges
-    Major,     // Significant state changes
-    Critical,  // Type changes, structural modifications
+    Trivial,  // Small numerical changes, formatting
+    Minor,    // Field value changes within expected ranges
+    Major,    // Significant state changes
+    Critical, // Type changes, structural modifications
 }
 
 /// Summary of diff results
@@ -213,7 +213,7 @@ impl BevyReflectionInspector {
             reflection_cache: Arc::new(RwLock::new(HashMap::new())),
             custom_inspectors: Arc::new(RwLock::new(HashMap::new())),
         };
-        
+
         // Register default custom inspectors
         inspector.register_default_inspectors();
         inspector
@@ -227,7 +227,10 @@ impl BevyReflectionInspector {
     }
 
     /// Register a custom inspector for specific types
-    pub async fn register_custom_inspector(&self, inspector: Box<dyn CustomInspector + Send + Sync>) {
+    pub async fn register_custom_inspector(
+        &self,
+        inspector: Box<dyn CustomInspector + Send + Sync>,
+    ) {
         let inspector_name = inspector.name().to_string();
         let mut inspectors = self.custom_inspectors.write().await;
         inspectors.insert(inspector_name.clone(), inspector);
@@ -236,27 +239,36 @@ impl BevyReflectionInspector {
 
     /// Discover component types using TypeRegistry (when Bevy feature is enabled)
     #[cfg(feature = "bevy-reflection")]
-    pub async fn discover_component_types(&self, type_registry: &TypeRegistry) -> Result<Vec<ReflectionMetadata>> {
+    pub async fn discover_component_types(
+        &self,
+        type_registry: &TypeRegistry,
+    ) -> Result<Vec<ReflectionMetadata>> {
         debug!("Discovering component types from TypeRegistry");
         let mut discovered_types = Vec::new();
-        
+
         for registration in type_registry.iter() {
             let type_info = registration.type_info();
             let metadata = self.build_reflection_metadata(registration).await?;
             discovered_types.push(metadata);
         }
-        
-        info!("Discovered {} reflected component types", discovered_types.len());
+
+        info!(
+            "Discovered {} reflected component types",
+            discovered_types.len()
+        );
         Ok(discovered_types)
     }
 
     /// Build reflection metadata from type registration
     #[cfg(feature = "bevy-reflection")]
-    async fn build_reflection_metadata(&self, registration: &TypeRegistration) -> Result<ReflectionMetadata> {
+    async fn build_reflection_metadata(
+        &self,
+        registration: &TypeRegistration,
+    ) -> Result<ReflectionMetadata> {
         let type_info = registration.type_info();
         let type_name = type_info.type_path().to_string();
         let type_id = registration.type_id();
-        
+
         let (type_category, fields) = match type_info {
             TypeInfo::Struct(struct_info) => {
                 let mut field_metadata = Vec::new();
@@ -344,15 +356,23 @@ impl BevyReflectionInspector {
     }
 
     /// Inspect a component value using reflection
-    pub async fn inspect_component(&self, component_type: &str, component_value: &ComponentValue) -> Result<ReflectionInspectionResult> {
+    pub async fn inspect_component(
+        &self,
+        component_type: &str,
+        component_value: &ComponentValue,
+    ) -> Result<ReflectionInspectionResult> {
         debug!("Inspecting component: {}", component_type);
-        
+
         let metadata = self.get_or_create_metadata(component_type).await?;
         let mut field_values = HashMap::new();
         let mut errors = Vec::new();
 
         // Try custom inspector first
-        if let Some(inspector_name) = &metadata.fields.first().and_then(|f| f.inspector_name.as_ref()) {
+        if let Some(inspector_name) = &metadata
+            .fields
+            .first()
+            .and_then(|f| f.inspector_name.as_ref())
+        {
             let inspectors = self.custom_inspectors.read().await;
             if let Some(inspector) = inspectors.get(inspector_name.as_str()) {
                 match inspector.inspect(component_value, component_type) {
@@ -368,7 +388,10 @@ impl BevyReflectionInspector {
 
         // Fallback to generic inspection
         if field_values.is_empty() {
-            match self.inspect_value_generic(component_value, component_type).await {
+            match self
+                .inspect_value_generic(component_value, component_type)
+                .await
+            {
                 Ok(inspected_value) => {
                     field_values.insert("root".to_string(), inspected_value);
                 }
@@ -388,7 +411,11 @@ impl BevyReflectionInspector {
     }
 
     /// Generic value inspection for fallback
-    pub async fn inspect_value_generic(&self, value: &ComponentValue, type_name: &str) -> Result<InspectedValue> {
+    pub async fn inspect_value_generic(
+        &self,
+        value: &ComponentValue,
+        type_name: &str,
+    ) -> Result<InspectedValue> {
         let inspected = match value {
             Value::Object(obj) => {
                 let mut children = Vec::new();
@@ -403,7 +430,7 @@ impl BevyReflectionInspector {
                         children: None,
                     });
                 }
-                
+
                 InspectedValue {
                     name: "root".to_string(),
                     raw_value: value.clone(),
@@ -426,7 +453,7 @@ impl BevyReflectionInspector {
                         children: None,
                     });
                 }
-                
+
                 InspectedValue {
                     name: "root".to_string(),
                     raw_value: value.clone(),
@@ -436,16 +463,14 @@ impl BevyReflectionInspector {
                     children: Some(children),
                 }
             }
-            _ => {
-                InspectedValue {
-                    name: "root".to_string(),
-                    raw_value: value.clone(),
-                    type_info: self.infer_type_from_value(value),
-                    display_value: self.format_display_value(value),
-                    inspectable: false,
-                    children: None,
-                }
-            }
+            _ => InspectedValue {
+                name: "root".to_string(),
+                raw_value: value.clone(),
+                type_info: self.infer_type_from_value(value),
+                display_value: self.format_display_value(value),
+                inspectable: false,
+                children: None,
+            },
         };
 
         Ok(inspected)
@@ -491,7 +516,7 @@ impl BevyReflectionInspector {
     /// Get or create metadata for a component type
     async fn get_or_create_metadata(&self, component_type: &str) -> Result<ReflectionMetadata> {
         let mut cache = self.reflection_cache.write().await;
-        
+
         if let Some(metadata) = cache.get(component_type) {
             return Ok(metadata.clone());
         }
@@ -516,10 +541,7 @@ impl BevyReflectionInspector {
     /// A component's fields *are* its JSON object keys; a component that is not an object (a newtype
     /// over a scalar, say) has exactly one implicit field. That is a definition, not a fallback: both
     /// shapes produce one map with the same meaning, and the caller has no second code path.
-    async fn field_map(
-        &self,
-        value: &ComponentValue,
-    ) -> Result<HashMap<String, InspectedValue>> {
+    async fn field_map(&self, value: &ComponentValue) -> Result<HashMap<String, InspectedValue>> {
         let mut fields = HashMap::new();
         match value {
             Value::Object(obj) => {
@@ -650,7 +672,7 @@ impl BevyReflectionInspector {
                 if let (Some(old_f), Some(new_f)) = (old_num.as_f64(), new_num.as_f64()) {
                     let diff = (old_f - new_f).abs();
                     let relative_change = diff / old_f.abs().max(1.0);
-                    
+
                     if relative_change < 0.001 {
                         ChangeSeverity::Trivial
                     } else if relative_change < 0.1 {
@@ -689,45 +711,58 @@ impl BevyReflectionInspector {
     }
 
     /// Generate human-readable change descriptions
-    fn generate_change_descriptions(&self, field_diffs: &HashMap<String, FieldDiff>) -> Vec<String> {
+    fn generate_change_descriptions(
+        &self,
+        field_diffs: &HashMap<String, FieldDiff>,
+    ) -> Vec<String> {
         let mut descriptions = Vec::new();
 
         for (field_name, diff) in field_diffs {
             let description = match &diff.change_type {
                 ChangeType::Added => {
-                    format!("Added field '{}' with value: {}", 
-                        field_name, 
-                        diff.new_value.as_ref()
+                    format!(
+                        "Added field '{}' with value: {}",
+                        field_name,
+                        diff.new_value
+                            .as_ref()
                             .map(|v| v.display_value.clone())
                             .unwrap_or_else(|| "unknown".to_string())
                     )
                 }
                 ChangeType::Removed => {
-                    format!("Removed field '{}' (was: {})", 
-                        field_name, 
-                        diff.old_value.as_ref()
+                    format!(
+                        "Removed field '{}' (was: {})",
+                        field_name,
+                        diff.old_value
+                            .as_ref()
                             .map(|v| v.display_value.clone())
                             .unwrap_or_else(|| "unknown".to_string())
                     )
                 }
                 ChangeType::Modified => {
-                    format!("Modified field '{}': {} -> {}", 
+                    format!(
+                        "Modified field '{}': {} -> {}",
                         field_name,
-                        diff.old_value.as_ref()
+                        diff.old_value
+                            .as_ref()
                             .map(|v| v.display_value.clone())
                             .unwrap_or_else(|| "unknown".to_string()),
-                        diff.new_value.as_ref()
+                        diff.new_value
+                            .as_ref()
                             .map(|v| v.display_value.clone())
                             .unwrap_or_else(|| "unknown".to_string())
                     )
                 }
                 ChangeType::TypeChanged => {
-                    format!("Type changed for field '{}': {} -> {}", 
+                    format!(
+                        "Type changed for field '{}': {} -> {}",
                         field_name,
-                        diff.old_value.as_ref()
+                        diff.old_value
+                            .as_ref()
                             .map(|v| v.type_info.clone())
                             .unwrap_or_else(|| "unknown".to_string()),
-                        diff.new_value.as_ref()
+                        diff.new_value
+                            .as_ref()
                             .map(|v| v.type_info.clone())
                             .unwrap_or_else(|| "unknown".to_string())
                     )
@@ -824,7 +859,9 @@ impl CustomInspector for TransformInspector {
                 children: Some(children),
             })
         } else {
-            Err(Error::DebugError("Transform component should be an object".to_string()))
+            Err(Error::DebugError(
+                "Transform component should be an object".to_string(),
+            ))
         }
     }
 
@@ -855,11 +892,13 @@ impl TransformInspector {
             let y = obj.get("y").and_then(|v| v.as_f64()).unwrap_or(0.0);
             let z = obj.get("z").and_then(|v| v.as_f64()).unwrap_or(0.0);
             let w = obj.get("w").and_then(|v| v.as_f64()).unwrap_or(1.0);
-            
+
             // Convert to euler angles for better readability
             let euler = self.quat_to_euler(x, y, z, w);
-            format!("Quat(x:{:.2}, y:{:.2}, z:{:.2}, w:{:.2}) ≈ ({:.1}°, {:.1}°, {:.1}°)", 
-                x, y, z, w, euler.0, euler.1, euler.2)
+            format!(
+                "Quat(x:{:.2}, y:{:.2}, z:{:.2}, w:{:.2}) ≈ ({:.1}°, {:.1}°, {:.1}°)",
+                x, y, z, w, euler.0, euler.1, euler.2
+            )
         } else {
             "Invalid Quat".to_string()
         }
@@ -870,7 +909,7 @@ impl TransformInspector {
         let yaw = (2.0 * (w * y + z * x)).atan2(1.0 - 2.0 * (y * y + z * z));
         let pitch = (2.0 * (w * z - x * y)).asin();
         let roll = (2.0 * (w * x + y * z)).atan2(1.0 - 2.0 * (x * x + z * z));
-        
+
         (yaw.to_degrees(), pitch.to_degrees(), roll.to_degrees())
     }
 }
@@ -883,7 +922,7 @@ mod tests {
     async fn test_reflection_inspector_creation() {
         let inspector = BevyReflectionInspector::new();
         let stats = inspector.get_reflection_stats().await;
-        
+
         assert!(stats.get("cached_types").is_some());
         assert!(stats.get("custom_inspectors").is_some());
     }
@@ -891,14 +930,17 @@ mod tests {
     #[tokio::test]
     async fn test_generic_inspection() {
         let inspector = BevyReflectionInspector::new();
-        
+
         let test_value = json!({
             "x": 1.0,
             "y": 2.0,
             "z": 3.0
         });
-        
-        let result = inspector.inspect_value_generic(&test_value, "TestType").await.unwrap();
+
+        let result = inspector
+            .inspect_value_generic(&test_value, "TestType")
+            .await
+            .unwrap();
         assert_eq!(result.type_info, "TestType");
         assert!(result.inspectable);
         assert!(result.children.is_some());
@@ -907,13 +949,13 @@ mod tests {
     #[tokio::test]
     async fn test_transform_inspector() {
         let inspector = TransformInspector;
-        
+
         let transform_value = json!({
             "translation": {"x": 1.0, "y": 2.0, "z": 3.0},
             "rotation": {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0},
             "scale": {"x": 1.0, "y": 1.0, "z": 1.0}
         });
-        
+
         let result = inspector.inspect(&transform_value, "Transform").unwrap();
         assert_eq!(result.name, "Transform");
         assert!(result.children.is_some());
@@ -923,12 +965,15 @@ mod tests {
     #[tokio::test]
     async fn test_diff_components() {
         let inspector = BevyReflectionInspector::new();
-        
+
         let old_value = json!({"x": 1.0, "y": 2.0});
         let new_value = json!({"x": 1.5, "y": 2.0, "z": 3.0});
-        
-        let diff_result = inspector.diff_components("TestComponent", &old_value, &new_value).await.unwrap();
-        
+
+        let diff_result = inspector
+            .diff_components("TestComponent", &old_value, &new_value)
+            .await
+            .unwrap();
+
         assert_eq!(diff_result.type_name, "TestComponent");
         assert!(diff_result.summary.changed_fields > 0);
         assert!(diff_result.summary.added_fields > 0);
@@ -937,15 +982,24 @@ mod tests {
     #[test]
     fn test_change_severity_assessment() {
         let inspector = BevyReflectionInspector::new();
-        
+
         // Test numerical change severity
         let old_num = json!(10.0);
         let new_num_trivial = json!(10.001);
         let new_num_minor = json!(10.5);
         let new_num_major = json!(15.0);
-        
-        assert!(matches!(inspector.assess_change_severity(&old_num, &new_num_trivial), ChangeSeverity::Trivial));
-        assert!(matches!(inspector.assess_change_severity(&old_num, &new_num_minor), ChangeSeverity::Minor));
-        assert!(matches!(inspector.assess_change_severity(&old_num, &new_num_major), ChangeSeverity::Major));
+
+        assert!(matches!(
+            inspector.assess_change_severity(&old_num, &new_num_trivial),
+            ChangeSeverity::Trivial
+        ));
+        assert!(matches!(
+            inspector.assess_change_severity(&old_num, &new_num_minor),
+            ChangeSeverity::Minor
+        ));
+        assert!(matches!(
+            inspector.assess_change_severity(&old_num, &new_num_major),
+            ChangeSeverity::Major
+        ));
     }
 }

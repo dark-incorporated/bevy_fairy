@@ -62,8 +62,17 @@ pub fn crop_png(png: &[u8], rect: CropRect) -> Result<Crop, String> {
     let mut encoded = Cursor::new(Vec::new());
     cropped
         .write_to(&mut encoded, ImageFormat::Png)
-        .map_err(|e| format!("could not encode the {} x {} crop as PNG: {e}", size[0], size[1]))?;
-    Ok(Crop { png: encoded.into_inner(), size, picture: [picture.width(), picture.height()] })
+        .map_err(|e| {
+            format!(
+                "could not encode the {} x {} crop as PNG: {e}",
+                size[0], size[1]
+            )
+        })?;
+    Ok(Crop {
+        png: encoded.into_inner(),
+        size,
+        picture: [picture.width(), picture.height()],
+    })
 }
 
 /// The part of `picture` that `rect` names, or why it names none. This is the one bounds rule:
@@ -95,7 +104,9 @@ pub fn crop_view<I: GenericImageView>(picture: &I, rect: CropRect) -> Result<Sub
         return refuse("reaches outside the picture, and a crop is never clamped");
     }
     // Every coordinate is now within 0..=width or 0..=height, both u32, so these cannot fail.
-    let to_u32 = |v: i64| u32::try_from(v).map_err(|_| format!("rect {rect:?}: {v} is not a pixel coordinate"));
+    let to_u32 = |v: i64| {
+        u32::try_from(v).map_err(|_| format!("rect {rect:?}: {v} is not a pixel coordinate"))
+    };
     let (x, y) = (to_u32(x0)?, to_u32(y0)?);
     Ok(picture.view(x, y, to_u32(x1)? - x, to_u32(y1)? - y))
 }

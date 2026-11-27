@@ -23,16 +23,16 @@ use ::serde::{Deserialize, Serialize};
 #[cfg(not(feature = "bevy-reflection"))]
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "bevy-reflection")]
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::any::TypeId;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{debug, info};
 
-use crate::server::bevy_reflection::inspector::{ReflectionMetadata, TypeCategory};
 #[cfg(feature = "bevy-reflection")]
 use crate::server::bevy_reflection::inspector::FieldMetadata;
+use crate::server::bevy_reflection::inspector::{ReflectionMetadata, TypeCategory};
 use crate::server::error::Result;
 
 /// TypeRegistry manager for dynamic component type discovery
@@ -122,7 +122,10 @@ impl TypeRegistryManager {
 
     /// Discover types from Bevy's TypeRegistry
     #[cfg(feature = "bevy-reflection")]
-    pub async fn discover_types_from_registry(&self, type_registry: &TypeRegistry) -> Result<usize> {
+    pub async fn discover_types_from_registry(
+        &self,
+        type_registry: &TypeRegistry,
+    ) -> Result<usize> {
         let start_time = std::time::Instant::now();
         debug!("Starting type discovery from TypeRegistry");
 
@@ -137,13 +140,13 @@ impl TypeRegistryManager {
             // Build cached type info
             let cached_info = self.build_cached_type_info(registration).await?;
             let is_reflected = cached_info.metadata.is_reflected;
-            
+
             // Store in caches
             {
                 let mut cache = self.type_cache.write().await;
                 cache.insert(type_name.clone(), cached_info);
             }
-            
+
             {
                 let mut id_cache = self.type_id_cache.write().await;
                 id_cache.insert(type_id, type_name.clone());
@@ -154,7 +157,10 @@ impl TypeRegistryManager {
                 reflected_count += 1;
             }
 
-            debug!("Discovered type: {} (reflected: {})", type_name, is_reflected);
+            debug!(
+                "Discovered type: {} (reflected: {})",
+                type_name, is_reflected
+            );
         }
 
         // Update statistics
@@ -177,7 +183,10 @@ impl TypeRegistryManager {
 
     /// Build cached type information from TypeRegistration
     #[cfg(feature = "bevy-reflection")]
-    async fn build_cached_type_info(&self, registration: &TypeRegistration) -> Result<CachedTypeInfo> {
+    async fn build_cached_type_info(
+        &self,
+        registration: &TypeRegistration,
+    ) -> Result<CachedTypeInfo> {
         let type_info = registration.type_info();
         let type_name = type_info.type_path().to_string();
         let type_id = registration.type_id();
@@ -186,7 +195,7 @@ impl TypeRegistryManager {
         let metadata = self.build_reflection_metadata(registration).await?;
 
         // Check capabilities
-        let constructible = registration.data::<ReflectDefault>().is_some() 
+        let constructible = registration.data::<ReflectDefault>().is_some()
             || registration.data::<ReflectFromPtr>().is_some();
         let serializable = registration.data::<ReflectSerialize>().is_some()
             || registration.data::<ReflectDeserialize>().is_some();
@@ -208,7 +217,10 @@ impl TypeRegistryManager {
 
     /// Build reflection metadata from TypeRegistration
     #[cfg(feature = "bevy-reflection")]
-    async fn build_reflection_metadata(&self, registration: &TypeRegistration) -> Result<ReflectionMetadata> {
+    async fn build_reflection_metadata(
+        &self,
+        registration: &TypeRegistration,
+    ) -> Result<ReflectionMetadata> {
         let type_info = registration.type_info();
         let type_name = type_info.type_path().to_string();
         let type_id = registration.type_id();
@@ -359,7 +371,10 @@ impl TypeRegistryManager {
                 aliases.extend(vec!["Transform".to_string(), "transform".to_string()]);
             }
             "bevy_transform::components::global_transform::GlobalTransform" => {
-                aliases.extend(vec!["GlobalTransform".to_string(), "global_transform".to_string()]);
+                aliases.extend(vec![
+                    "GlobalTransform".to_string(),
+                    "global_transform".to_string(),
+                ]);
             }
             "bevy_core::name::Name" => {
                 aliases.extend(vec!["Name".to_string(), "name".to_string()]);
@@ -379,7 +394,9 @@ impl TypeRegistryManager {
         let mut matches = Vec::new();
 
         for (type_name, cached_info) in cache.iter() {
-            let score = self.calculate_match_score(type_name, cached_info, query).await;
+            let score = self
+                .calculate_match_score(type_name, cached_info, query)
+                .await;
             if score > query.min_score {
                 matches.push(TypeQueryMatch {
                     type_name: type_name.clone(),
@@ -391,7 +408,11 @@ impl TypeRegistryManager {
         }
 
         // Sort by relevance score (descending)
-        matches.sort_by(|a, b| b.relevance_score.partial_cmp(&a.relevance_score).unwrap_or(std::cmp::Ordering::Equal));
+        matches.sort_by(|a, b| {
+            b.relevance_score
+                .partial_cmp(&a.relevance_score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
 
         // Apply limit
         let truncated = matches.len() > query.limit;
@@ -408,18 +429,26 @@ impl TypeRegistryManager {
     }
 
     /// Calculate match score for a type against query
-    async fn calculate_match_score(&self, type_name: &str, cached_info: &CachedTypeInfo, query: &TypeQuery) -> f64 {
+    async fn calculate_match_score(
+        &self,
+        type_name: &str,
+        cached_info: &CachedTypeInfo,
+        query: &TypeQuery,
+    ) -> f64 {
         let mut score = 0.0;
 
         // Name matching
         if let Some(name_pattern) = &query.name_pattern {
-            if type_name.to_lowercase().contains(&name_pattern.to_lowercase()) {
+            if type_name
+                .to_lowercase()
+                .contains(&name_pattern.to_lowercase())
+            {
                 score += 0.8;
                 if type_name.to_lowercase() == name_pattern.to_lowercase() {
                     score += 0.2; // Exact match bonus
                 }
             }
-            
+
             // Check aliases
             for alias in &cached_info.aliases {
                 if alias.to_lowercase().contains(&name_pattern.to_lowercase()) {
@@ -430,7 +459,9 @@ impl TypeRegistryManager {
 
         // Category matching
         if let Some(category) = &query.category {
-            if std::mem::discriminant(&cached_info.metadata.type_category) == std::mem::discriminant(category) {
+            if std::mem::discriminant(&cached_info.metadata.type_category)
+                == std::mem::discriminant(category)
+            {
                 score += 0.5;
             }
         }
@@ -442,8 +473,16 @@ impl TypeRegistryManager {
 
         // Field requirements
         if let Some(required_fields) = &query.required_fields {
-            let field_names: Vec<String> = cached_info.metadata.fields.iter().map(|f| f.name.clone()).collect();
-            let matching_fields = required_fields.iter().filter(|f| field_names.contains(f)).count();
+            let field_names: Vec<String> = cached_info
+                .metadata
+                .fields
+                .iter()
+                .map(|f| f.name.clone())
+                .collect();
+            let matching_fields = required_fields
+                .iter()
+                .filter(|f| field_names.contains(f))
+                .count();
             let field_score = matching_fields as f64 / required_fields.len() as f64;
             score += field_score * 0.3;
         }
@@ -457,14 +496,22 @@ impl TypeRegistryManager {
     }
 
     /// Get reasons why a type matched the query
-    async fn get_match_reasons(&self, type_name: &str, cached_info: &CachedTypeInfo, query: &TypeQuery) -> Vec<String> {
+    async fn get_match_reasons(
+        &self,
+        type_name: &str,
+        cached_info: &CachedTypeInfo,
+        query: &TypeQuery,
+    ) -> Vec<String> {
         let mut reasons = Vec::new();
 
         if let Some(name_pattern) = &query.name_pattern {
-            if type_name.to_lowercase().contains(&name_pattern.to_lowercase()) {
+            if type_name
+                .to_lowercase()
+                .contains(&name_pattern.to_lowercase())
+            {
                 reasons.push(format!("Name contains '{}'", name_pattern));
             }
-            
+
             for alias in &cached_info.aliases {
                 if alias.to_lowercase().contains(&name_pattern.to_lowercase()) {
                     reasons.push(format!("Alias '{}' contains '{}'", alias, name_pattern));
@@ -473,7 +520,9 @@ impl TypeRegistryManager {
         }
 
         if let Some(category) = &query.category {
-            if std::mem::discriminant(&cached_info.metadata.type_category) == std::mem::discriminant(category) {
+            if std::mem::discriminant(&cached_info.metadata.type_category)
+                == std::mem::discriminant(category)
+            {
                 reasons.push(format!("Type category matches: {:?}", category));
             }
         }
@@ -616,7 +665,7 @@ mod tests {
     async fn test_type_registry_manager_creation() {
         let manager = TypeRegistryManager::new();
         let stats = manager.get_stats().await;
-        
+
         assert_eq!(stats.total_types, 0);
         assert_eq!(stats.reflected_types, 0);
     }
@@ -624,7 +673,7 @@ mod tests {
     #[tokio::test]
     async fn test_type_query_default() {
         let query = TypeQuery::default();
-        
+
         assert_eq!(query.min_score, 0.1);
         assert_eq!(query.limit, 100);
         assert!(!query.requires_reflection);
@@ -634,12 +683,15 @@ mod tests {
     fn test_type_path_utils() {
         use type_path_utils::*;
 
-        assert_eq!(extract_short_name("bevy_transform::components::transform::Transform"), "Transform");
+        assert_eq!(
+            extract_short_name("bevy_transform::components::transform::Transform"),
+            "Transform"
+        );
         assert!(is_bevy_core_type("bevy_core::name::Name"));
         assert!(!is_bevy_core_type("my_game::MyComponent"));
         assert!(is_generic_type("Option<String>"));
         assert!(!is_generic_type("Transform"));
-        
+
         let params = extract_generic_params("HashMap<String, i32>");
         assert_eq!(params, vec!["String", "i32"]);
     }

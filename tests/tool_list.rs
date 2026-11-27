@@ -7,7 +7,7 @@
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Command, Stdio};
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// The tools as the real binary lists them over stdio.
 fn listed_tools() -> Vec<Value> {
@@ -39,9 +39,11 @@ fn listed_tools() -> Vec<Value> {
         }
     };
 
-    send(json!({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
+    send(
+        json!({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
         "protocolVersion": "2024-11-05", "capabilities": {},
-        "clientInfo": {"name": "order-test", "version": "1"}}}));
+        "clientInfo": {"name": "order-test", "version": "1"}}}),
+    );
     receive(1);
     send(json!({"jsonrpc": "2.0", "method": "notifications/initialized"}));
     send(json!({"jsonrpc": "2.0", "id": 2, "method": "tools/list"}));
@@ -49,13 +51,21 @@ fn listed_tools() -> Vec<Value> {
     let _ = child.kill();
     let _ = child.wait();
 
-    reply["result"]["tools"].as_array().expect("tools/list returns tools").clone()
+    reply["result"]["tools"]
+        .as_array()
+        .expect("tools/list returns tools")
+        .clone()
 }
 
 fn tool_names() -> Vec<String> {
     listed_tools()
         .iter()
-        .map(|tool| tool["name"].as_str().expect("a tool has a name").to_string())
+        .map(|tool| {
+            tool["name"]
+                .as_str()
+                .expect("a tool has a name")
+                .to_string()
+        })
         .collect()
 }
 
@@ -64,7 +74,10 @@ fn tools_are_listed_by_name_and_in_the_same_order_every_launch() {
     let first = tool_names();
     let mut sorted = first.clone();
     sorted.sort();
-    assert_eq!(first, sorted, "tools/list must return the tools sorted by name");
+    assert_eq!(
+        first, sorted,
+        "tools/list must return the tools sorted by name"
+    );
 
     for launch in 2..=4 {
         assert_eq!(
@@ -85,7 +98,10 @@ fn every_tool_refuses_arguments_it_does_not_advertise() {
         .filter(|tool| tool["inputSchema"]["additionalProperties"] != json!(false))
         .map(|tool| tool["name"].as_str().unwrap_or_default().to_string())
         .collect();
-    assert!(open.is_empty(), "these tools silently drop unknown arguments: {open:?}");
+    assert!(
+        open.is_empty(),
+        "these tools silently drop unknown arguments: {open:?}"
+    );
 }
 
 /// `stress_test` stays out of `tools/list` until it can report what it did. Against the fixture
@@ -195,7 +211,11 @@ fn render_tool_reference(tools: &[Value]) -> String {
                 .unwrap_or_default()
                 .replace('\n', " ")
                 .replace('|', "\\|");
-            let req = if required.contains(&arg.as_str()) { "yes" } else { "no" };
+            let req = if required.contains(&arg.as_str()) {
+                "yes"
+            } else {
+                "no"
+            };
             out.push_str(&format!("| `{arg}` | {kind} | {req} | {doc} |\n"));
         }
     }
@@ -211,19 +231,28 @@ fn every_observe_query_example_in_the_schema_is_accepted_by_the_parser() {
     use bevy_fairy::server::query_parser::{QueryParser, RegexQueryParser};
 
     let tools = listed_tools();
-    let observe = tools.iter().find(|t| t["name"] == "observe").expect("observe is listed");
+    let observe = tools
+        .iter()
+        .find(|t| t["name"] == "observe")
+        .expect("observe is listed");
     let description = observe["inputSchema"]["properties"]["query"]["description"]
         .as_str()
         .expect("the `query` field carries a description");
     let examples: Vec<&str> = description.split('`').skip(1).step_by(2).collect();
-    assert!(examples.len() >= 5, "the `query` description gives no examples: {description}");
+    assert!(
+        examples.len() >= 5,
+        "the `query` description gives no examples: {description}"
+    );
     let parser = RegexQueryParser::new().expect("the parser builds");
     let refused: Vec<&str> = examples
         .iter()
         .copied()
         .filter(|example| *example != "brp" && parser.parse(example).is_err())
         .collect();
-    assert!(refused.is_empty(), "observe's parser refuses its own advertised examples: {refused:?}");
+    assert!(
+        refused.is_empty(),
+        "observe's parser refuses its own advertised examples: {refused:?}"
+    );
 }
 
 /// An argument with no description is one an agent has to guess at. `replay` advertised
@@ -234,11 +263,16 @@ fn every_observe_query_example_in_the_schema_is_accepted_by_the_parser() {
 fn every_advertised_argument_has_a_description() {
     let mut bare = Vec::new();
     for tool in listed_tools() {
-        let Some(props) = tool["inputSchema"]["properties"].as_object() else { continue };
+        let Some(props) = tool["inputSchema"]["properties"].as_object() else {
+            continue;
+        };
         for (name, schema) in props {
             let text = schema["description"].as_str().unwrap_or_default().trim();
             if text.is_empty() {
-                bare.push(format!("{}.{name}", tool["name"].as_str().unwrap_or_default()));
+                bare.push(format!(
+                    "{}.{name}",
+                    tool["name"].as_str().unwrap_or_default()
+                ));
             }
         }
     }

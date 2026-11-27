@@ -48,9 +48,9 @@ use std::collections::{HashMap, VecDeque};
 
 use bevy::ecs::system::SystemId;
 use bevy::prelude::*;
-use bevy::remote::{error_codes, BrpError, BrpResult};
+use bevy::remote::{BrpError, BrpResult, error_codes};
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// How long the confirmation of a finished step stays up before the next one appears.
 ///
@@ -382,7 +382,11 @@ impl Checkpoints {
 }
 
 fn invalid_params(message: String) -> BrpError {
-    BrpError { code: error_codes::INVALID_PARAMS, message, data: None }
+    BrpError {
+        code: error_codes::INVALID_PARAMS,
+        message,
+        data: None,
+    }
 }
 
 /// What `bevy_fairy/guide` accepts.
@@ -489,14 +493,21 @@ pub fn handle_guide(
         // front of the card.
         if let Some((label, name)) = steps.iter().find_map(|s| {
             let name = s.checkpoint.as_deref()?;
-            checkpoints.get(name).is_none().then(|| (s.label.as_str(), name))
+            checkpoints
+                .get(name)
+                .is_none()
+                .then(|| (s.label.as_str(), name))
         }) {
             let known = checkpoints.names();
             return Err(invalid_params(format!(
                 "step \"{label}\" names checkpoint `{name}`, which this app has not registered, so \
                  it would wait for ever. This app registers: {}. Name one of those, or use \
                  checkpoint: null for a step only the person can judge. Nothing was posted.",
-                if known.is_empty() { "none".to_string() } else { known.join(", ") }
+                if known.is_empty() {
+                    "none".to_string()
+                } else {
+                    known.join(", ")
+                }
             )));
         }
         let n = steps.len();
@@ -523,7 +534,10 @@ pub fn handle_guide(
 /// exclusive work only when a step with a checkpoint is current, so an app with no script (the
 /// resting state of every host that has the plugin on) pays for one `Res` read.
 pub fn evaluate_checkpoint(guide: Res<Guide>, mut commands: Commands) {
-    if guide.current().is_some_and(|step| step.checkpoint.is_some()) {
+    if guide
+        .current()
+        .is_some_and(|step| step.checkpoint.is_some())
+    {
         commands.queue(|world: &mut World| {
             let outcome = run_current_checkpoint(world);
             if let Some(mut guide) = world.get_resource_mut::<Guide>() {
@@ -535,11 +549,18 @@ pub fn evaluate_checkpoint(guide: Res<Guide>, mut commands: Commands) {
 
 /// The refusal for a checkpoint name nothing registered.
 fn unregistered(world: &World, name: &str) -> BrpError {
-    let known = world.get_resource::<Checkpoints>().map(Checkpoints::names).unwrap_or_default();
+    let known = world
+        .get_resource::<Checkpoints>()
+        .map(Checkpoints::names)
+        .unwrap_or_default();
     invalid_params(format!(
         "no checkpoint named `{name}`. This host registers: {}. A script naming a condition \
          nobody watches would wait for ever.",
-        if known.is_empty() { "none".to_string() } else { known.join(", ") }
+        if known.is_empty() {
+            "none".to_string()
+        } else {
+            known.join(", ")
+        }
     ))
 }
 
@@ -548,11 +569,18 @@ fn unregistered(world: &World, name: &str) -> BrpError {
 fn run_current_checkpoint(world: &mut World) -> Result<(), BrpError> {
     let Some((name, label, args)) = world.get_resource::<Guide>().and_then(|guide| {
         let step = guide.current()?;
-        Some((step.checkpoint.clone()?, step.label.clone(), step.with.clone().unwrap_or(Value::Null)))
+        Some((
+            step.checkpoint.clone()?,
+            step.label.clone(),
+            step.with.clone().unwrap_or(Value::Null),
+        ))
     }) else {
         return Ok(());
     };
-    let Some(system) = world.get_resource::<Checkpoints>().and_then(|c| c.get(&name)) else {
+    let Some(system) = world
+        .get_resource::<Checkpoints>()
+        .and_then(|c| c.get(&name))
+    else {
         return Err(unregistered(world, &name));
     };
     match world.run_system_with(system, args) {
@@ -589,7 +617,8 @@ pub fn watch_guide(In(_params): In<Option<Value>>, world: &mut World) -> BrpResu
     let Some(mut guide) = world.get_resource_mut::<Guide>() else {
         return Err(BrpError {
             code: error_codes::INTERNAL_ERROR,
-            message: "no Guide resource; add DebuggerPlugin or init_resource::<Guide>()".to_string(),
+            message: "no Guide resource; add DebuggerPlugin or init_resource::<Guide>()"
+                .to_string(),
             data: None,
         });
     };
@@ -626,12 +655,19 @@ pub fn watch_guide(In(_params): In<Option<Value>>, world: &mut World) -> BrpResu
     };
 
     // A checkpoint the app cannot run is said once per step, not once per frame.
-    let problem = if world.get_resource::<Checkpoints>().is_some_and(|c| c.get(&name).is_some()) {
-        world.resource::<Guide>().checkpoint_error.clone().map(|message| BrpError {
-            code: error_codes::INTERNAL_ERROR,
-            message,
-            data: None,
-        })
+    let problem = if world
+        .get_resource::<Checkpoints>()
+        .is_some_and(|c| c.get(&name).is_some())
+    {
+        world
+            .resource::<Guide>()
+            .checkpoint_error
+            .clone()
+            .map(|message| BrpError {
+                code: error_codes::INTERNAL_ERROR,
+                message,
+                data: None,
+            })
     } else {
         Some(unregistered(world, &name))
     };
@@ -705,7 +741,10 @@ pub struct GuidePlacement {
 
 impl Default for GuidePlacement {
     fn default() -> Self {
-        GuidePlacement { top: 12.0, width: 440.0 }
+        GuidePlacement {
+            top: 12.0,
+            width: 440.0,
+        }
     }
 }
 
@@ -751,7 +790,14 @@ fn spawn_guide_overlay(mut commands: Commands) {
             BorderColor::all(Color::srgba(0.92, 0.80, 0.35, 0.45)),
         ))
         .with_children(|p| {
-            p.spawn((GuideBody, Node { flex_direction: FlexDirection::Column, row_gap: Val::Px(3.0), ..default() }));
+            p.spawn((
+                GuideBody,
+                Node {
+                    flex_direction: FlexDirection::Column,
+                    row_gap: Val::Px(3.0),
+                    ..default()
+                },
+            ));
         });
 }
 
@@ -820,7 +866,12 @@ fn paint_guide(
                 return;
             }
             let Some(step) = current else { return };
-            line(p, format!("STEP {step_no} OF {of}   {}", step.label), Color::srgb(0.92, 0.80, 0.35), 13.0);
+            line(
+                p,
+                format!("STEP {step_no} OF {of}   {}", step.label),
+                Color::srgb(0.92, 0.80, 0.35),
+                13.0,
+            );
             // **Say when the step is waiting on the person, because it looks identical when it is
             // not.** A step with no checkpoint never advances on its own -- that is what makes it the
             // one a machine cannot judge -- and until this line existed the card for it was the same
@@ -857,14 +908,23 @@ fn paint_guide(
                 line(p, format!("  {hint}"), Color::srgb(0.88, 0.86, 0.83), 12.0);
             }
             if !step.recovery.is_empty() {
-                line(p, format!("if not: {}", step.recovery), Color::srgb(0.62, 0.60, 0.58), 11.0);
+                line(
+                    p,
+                    format!("if not: {}", step.recovery),
+                    Color::srgb(0.62, 0.60, 0.58),
+                    11.0,
+                );
             }
         });
     }
 }
 
 fn line(p: &mut ChildSpawnerCommands, text: String, colour: Color, size: f32) {
-    p.spawn((Text::new(text), TextColor(colour), TextFont::from_font_size(size)));
+    p.spawn((
+        Text::new(text),
+        TextColor(colour),
+        TextFont::from_font_size(size),
+    ));
 }
 
 /// The overlay's systems, kept together so [`crate::DebuggerPlugin`] adds one thing.

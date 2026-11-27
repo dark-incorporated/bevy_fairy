@@ -32,7 +32,7 @@ use bevy::window::{CursorMoved, PrimaryWindow, WindowEvent};
 #[cfg(feature = "plugin-screenshot")]
 use bevy::camera::{ImageRenderTarget, NormalizedRenderTarget};
 #[cfg(feature = "plugin-screenshot")]
-use bevy::input::{mouse::MouseButton, ButtonState};
+use bevy::input::{ButtonState, mouse::MouseButton};
 #[cfg(feature = "plugin-screenshot")]
 use bevy::picking::pointer::{Location, PointerAction, PointerButton, PointerId, PointerInput};
 
@@ -77,7 +77,11 @@ impl PointerRoute<'_, '_> {
     pub fn moved(&mut self, from: Option<Vec2>, to: Vec2) {
         let window = self.primary.single();
         if let Ok(window) = window {
-            let event = CursorMoved { window, position: to, delta: from.map(|f| to - f) };
+            let event = CursorMoved {
+                window,
+                position: to,
+                delta: from.map(|f| to - f),
+            };
             if let Some(messages) = self.cursor_messages.as_mut() {
                 messages.write(event.clone());
             }
@@ -98,11 +102,17 @@ impl PointerRoute<'_, '_> {
     /// Writes the move to the capture image's pointer; `false` when there is no such route.
     #[cfg(feature = "plugin-screenshot")]
     fn move_on_image(&mut self, from: Option<Vec2>, to: Vec2) -> bool {
-        let Some(location) = self.image_location(to) else { return false };
+        let Some(location) = self.image_location(to) else {
+            return false;
+        };
         if let Some(pointer) = self.pointer.as_mut() {
             // `mouse_pick_events` computes `position - cursor_last`, with `cursor_last` starting at 0.
             let delta = to - from.unwrap_or(Vec2::ZERO);
-            pointer.write(PointerInput::new(PointerId::Mouse, location, PointerAction::Move { delta }));
+            pointer.write(PointerInput::new(
+                PointerId::Mouse,
+                location,
+                PointerAction::Move { delta },
+            ));
         }
         true
     }

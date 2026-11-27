@@ -124,7 +124,7 @@ fn no_doc_tells_the_reader_to_add_a_second_remote_plugin() {
 /// name the crate by the names it had.
 fn doc_files() -> Vec<(String, String)> {
     let mut files = Vec::new();
-    for dir in ["." , "book", "docs"] {
+    for dir in [".", "book", "docs"] {
         let path = root().join(dir);
         if !path.is_dir() {
             continue;
@@ -137,7 +137,10 @@ fn doc_files() -> Vec<(String, String)> {
                 if path.is_dir() {
                     // `target/` and `.git/` hold no docs and are huge. `docs/loop/` is the
                     // loop's own history.
-                    let name = path.file_name().and_then(|n| n.to_str()).unwrap_or_default();
+                    let name = path
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or_default();
                     if name == "target" || name == ".git" || name == "loop" || name == ".omp" {
                         continue;
                     }
@@ -275,11 +278,7 @@ fn the_changelog_migration_table_names_the_fields_the_tools_take() {
             .unwrap_or_else(|| panic!("CHANGELOG.md has no migration row for `{tool}`"));
 
         // The "after" cell is the last one.
-        let after = row
-            .rsplit('|')
-            .nth(1)
-            .expect("the row has cells")
-            .trim();
+        let after = row.rsplit('|').nth(1).expect("the row has cells").trim();
         let after = after.trim_start_matches('`').trim_end_matches('`');
 
         // Every backticked name in the cell must be a field of the tool's request struct.
@@ -422,10 +421,15 @@ fn no_shipped_file_tells_the_reader_to_run_a_subcommand_the_binary_lacks() {
     let mut files: Vec<(String, String)> = doc_files();
     for dir in ["scripts", "homebrew", "launchd"] {
         let path = root().join(dir);
-        let Ok(entries) = fs::read_dir(&path) else { continue };
+        let Ok(entries) = fs::read_dir(&path) else {
+            continue;
+        };
         for entry in entries.flatten() {
             if let Ok(text) = fs::read_to_string(entry.path()) {
-                files.push((format!("{dir}/{}", entry.file_name().to_string_lossy()), text));
+                files.push((
+                    format!("{dir}/{}", entry.file_name().to_string_lossy()),
+                    text,
+                ));
             }
         }
     }
@@ -458,7 +462,10 @@ fn registered_tools() -> std::collections::BTreeMap<String, std::collections::BT
             current = Some(name.to_string());
         } else if let (Some(tool), Some(row)) = (&current, line.strip_prefix("| `")) {
             if let Some(arg) = row.split('`').next() {
-                tools.get_mut(tool).expect("tool is registered").insert(arg.to_string());
+                tools
+                    .get_mut(tool)
+                    .expect("tool is registered")
+                    .insert(arg.to_string());
             }
         }
     }
@@ -471,7 +478,10 @@ fn registered_tools() -> std::collections::BTreeMap<String, std::collections::BT
 #[test]
 fn every_call_tool_example_names_a_registered_tool_and_its_arguments() {
     let tools = registered_tools();
-    assert!(tools.len() > 5, "docs/mcp-tools.md lists no tools; the parser is broken");
+    assert!(
+        tools.len() > 5,
+        "docs/mcp-tools.md lists no tools; the parser is broken"
+    );
     let mut problems = Vec::new();
     for (path, text) in doc_files() {
         let mut rest = text.as_str();
@@ -479,7 +489,9 @@ fn every_call_tool_example_names_a_registered_tool_and_its_arguments() {
             rest = &rest[at + "callTool(\"".len()..];
             let name = rest.split('"').next().unwrap_or_default().to_string();
             let Some(args) = tools.get(&name) else {
-                problems.push(format!("{path}: callTool(\"{name}\") is not a registered tool"));
+                problems.push(format!(
+                    "{path}: callTool(\"{name}\") is not a registered tool"
+                ));
                 continue;
             };
             let Some(open) = rest.find('{') else { continue };
@@ -505,12 +517,18 @@ fn every_call_tool_example_names_a_registered_tool_and_its_arguments() {
             }
             for key in keys {
                 if !args.contains(&key) {
-                    problems.push(format!("{path}: callTool(\"{name}\") passes `{key}`, which {name} does not take"));
+                    problems.push(format!(
+                        "{path}: callTool(\"{name}\") passes `{key}`, which {name} does not take"
+                    ));
                 }
             }
         }
     }
-    assert!(problems.is_empty(), "docs show calls the server would refuse:\n{}", problems.join("\n"));
+    assert!(
+        problems.is_empty(),
+        "docs show calls the server would refuse:\n{}",
+        problems.join("\n")
+    );
 }
 
 /// A relative markdown link must resolve to a file. `docs/quick-start.md` linked
@@ -519,13 +537,21 @@ fn every_call_tool_example_names_a_registered_tool_and_its_arguments() {
 fn every_relative_doc_link_resolves() {
     let mut broken = Vec::new();
     for (path, text) in doc_files() {
-        let dir = root().join(&path).parent().expect("a file has a parent").to_path_buf();
+        let dir = root()
+            .join(&path)
+            .parent()
+            .expect("a file has a parent")
+            .to_path_buf();
         let mut rest = text.as_str();
         while let Some(at) = rest.find("](") {
             rest = &rest[at + 2..];
             let target = rest.split(')').next().unwrap_or_default();
             let file = target.split('#').next().unwrap_or_default();
-            if file.is_empty() || file.contains("://") || file.starts_with("mailto:") || file.contains(' ') {
+            if file.is_empty()
+                || file.contains("://")
+                || file.starts_with("mailto:")
+                || file.contains(' ')
+            {
                 continue;
             }
             if !dir.join(file).exists() {
@@ -533,5 +559,9 @@ fn every_relative_doc_link_resolves() {
             }
         }
     }
-    assert!(broken.is_empty(), "broken relative links:\n{}", broken.join("\n"));
+    assert!(
+        broken.is_empty(),
+        "broken relative links:\n{}",
+        broken.join("\n")
+    );
 }

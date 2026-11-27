@@ -1,13 +1,13 @@
 /// Experiment system for modifying game state
 use serde::{Deserialize, Serialize};
-use std::future::Future;
 use std::collections::VecDeque;
+use std::future::Future;
 use tracing::{debug, info, warn};
 
 use crate::server::brp_client::BrpClient;
 use crate::server::brp_messages::{
-    builtin_methods, entity_data_from_get_result, BrpPayload, BrpRequest, ComponentTypeId,
-    ComponentValue, EntityData, EntityId,
+    BrpPayload, BrpRequest, ComponentTypeId, ComponentValue, EntityData, EntityId, builtin_methods,
+    entity_data_from_get_result,
 };
 use crate::server::error::{Error, Result};
 
@@ -50,7 +50,9 @@ impl Action {
                 components.iter().map(|c| c.type_id.as_str()).collect()
             }
             Self::Delete { .. } => Vec::new(),
-            Self::Batch { actions, .. } => actions.iter().flat_map(Action::component_types).collect(),
+            Self::Batch { actions, .. } => {
+                actions.iter().flat_map(Action::component_types).collect()
+            }
         }
     }
 
@@ -201,9 +203,9 @@ fn holds(game: &serde_json::Value, written: &serde_json::Value) -> bool {
         (Value::Array(game), Value::Array(written)) => {
             game.len() == written.len() && game.iter().zip(written).all(|(g, w)| holds(g, w))
         }
-        (Value::Object(game), Value::Object(written)) => {
-            written.iter().all(|(key, w)| game.get(key).is_some_and(|g| holds(g, w)))
-        }
+        (Value::Object(game), Value::Object(written)) => written
+            .iter()
+            .all(|(key, w)| game.get(key).is_some_and(|g| holds(g, w))),
         _ => game == written,
     }
 }
@@ -301,8 +303,7 @@ impl ActionExecutor {
         &'a mut self,
         action: &'a Action,
         brp_client: &'a mut BrpClient,
-    ) -> std::pin::Pin<Box<dyn Future<Output = Result<ActionResult>> + Send + 'a>>
-    {
+    ) -> std::pin::Pin<Box<dyn Future<Output = Result<ActionResult>> + Send + 'a>> {
         Box::pin(async move {
             let result = self.dispatch(action, brp_client, true).await;
 
@@ -328,8 +329,7 @@ impl ActionExecutor {
         action: &'a Action,
         brp_client: &'a mut BrpClient,
         read_back: bool,
-    ) -> std::pin::Pin<Box<dyn Future<Output = Result<ActionResult>> + Send + 'a>>
-    {
+    ) -> std::pin::Pin<Box<dyn Future<Output = Result<ActionResult>> + Send + 'a>> {
         Box::pin(async move {
             debug!("Executing action: {:?}", action);
 
@@ -475,7 +475,8 @@ impl ActionExecutor {
                     // The game's answer to the write is "accepted". What it holds a frame later
                     // is another matter: a system can set the value again.
                     if read_back {
-                        self.note_read_back(&mut result, entity_id, components, brp_client).await;
+                        self.note_read_back(&mut result, entity_id, components, brp_client)
+                            .await;
                     }
 
                     Ok(result)
@@ -503,11 +504,19 @@ impl ActionExecutor {
         };
         let held: serde_json::Map<String, serde_json::Value> = components
             .iter()
-            .filter_map(|c| data.components.get(&c.type_id).map(|value| (c.type_id.clone(), value.clone())))
+            .filter_map(|c| {
+                data.components
+                    .get(&c.type_id)
+                    .map(|value| (c.type_id.clone(), value.clone()))
+            })
             .collect();
         let differing: Vec<&str> = components
             .iter()
-            .filter(|c| !held.get(&c.type_id).is_some_and(|game| holds(game, &c.value)))
+            .filter(|c| {
+                !held
+                    .get(&c.type_id)
+                    .is_some_and(|game| holds(game, &c.value))
+            })
             .map(|c| c.type_id.as_str())
             .collect();
         if !differing.is_empty() {
@@ -516,7 +525,10 @@ impl ActionExecutor {
                 differing.join(", ")
             );
         }
-        result.read_back = Some(ReadBack { matches: differing.is_empty(), components: held });
+        result.read_back = Some(ReadBack {
+            matches: differing.is_empty(),
+            components: held,
+        });
     }
 
     /// Execute delete action
@@ -539,12 +551,10 @@ impl ActionExecutor {
         // Send request
         match brp_client.send_request(&request).await {
             Ok(response) => match response.payload {
-                BrpPayload::Result(_) => {
-                    Ok(ActionResult::success(
-                        "delete",
-                        format!("Successfully deleted entity {entity_id}"),
-                    ))
-                }
+                BrpPayload::Result(_) => Ok(ActionResult::success(
+                    "delete",
+                    format!("Successfully deleted entity {entity_id}"),
+                )),
                 BrpPayload::Error(err) => Ok(ActionResult::failure("delete", err.message)),
             },
             Err(e) => Ok(ActionResult::failure("delete", e.to_string())),
@@ -566,10 +576,14 @@ impl ActionExecutor {
 
         // Reversing a batch that holds a batch would have to look inside it, and a half-reversed
         // rollback that says "rolled back" is worse than a refusal. Nothing has run yet.
-        if actions.iter().any(|action| matches!(action, Action::Batch { .. })) {
+        if actions
+            .iter()
+            .any(|action| matches!(action, Action::Batch { .. }))
+        {
             return Ok(ActionResult::batch(
                 false,
-                "a batch cannot contain a batch: put all the actions in one batch. Nothing was run".to_string(),
+                "a batch cannot contain a batch: put all the actions in one batch. Nothing was run"
+                    .to_string(),
                 Vec::new(),
             ));
         }
@@ -592,7 +606,9 @@ impl ActionExecutor {
             // Check if rollback needed
             if transaction.should_rollback() {
                 warn!("Transaction failed, rolling back {} actions", actions.len());
-                let not_reversed = self.rollback_transaction(&mut transaction, brp_client).await?;
+                let not_reversed = self
+                    .rollback_transaction(&mut transaction, brp_client)
+                    .await?;
                 self.unreversed += not_reversed;
 
                 self.transaction_stack.pop();
@@ -601,7 +617,10 @@ impl ActionExecutor {
                     .iter()
                     .position(|r| !r.success)
                     .map(|i| {
-                        let error = transaction.results[i].error.as_deref().unwrap_or("no reason given");
+                        let error = transaction.results[i]
+                            .error
+                            .as_deref()
+                            .unwrap_or("no reason given");
                         format!("action {i} failed: {error}")
                     })
                     .unwrap_or_default();
@@ -737,7 +756,9 @@ impl ActionExecutor {
             self.undo_stack.push_back(entry);
             return Ok(ActionResult::failure(
                 "undo",
-                format!("`{what}` cannot be undone: nothing recorded how to reverse it (a delete cannot be put back, a modify can only be reversed when every component it set existed before)"),
+                format!(
+                    "`{what}` cannot be undone: nothing recorded how to reverse it (a delete cannot be put back, a modify can only be reversed when every component it set existed before)"
+                ),
             ));
         };
         let result = self.dispatch(&reverse_action, brp_client, true).await?;
@@ -784,7 +805,12 @@ impl ActionExecutor {
 
     /// The reply to an `undo` or `redo`: the result of the action that ran, named for what was
     /// asked, not for the reverse operation that carried it out.
-    fn answer_as(asked: &str, verb: &str, of_action: &'static str, mut result: ActionResult) -> ActionResult {
+    fn answer_as(
+        asked: &str,
+        verb: &str,
+        of_action: &'static str,
+        mut result: ActionResult,
+    ) -> ActionResult {
         result.action_type = asked.to_string();
         result.of_action = Some(of_action.to_string());
         result.rollback_available = None;
@@ -803,7 +829,9 @@ impl ActionExecutor {
         self.redo_stack.clear();
         while let Some(entry) = self.undo_stack.pop_back() {
             let reversed = match &entry.reverse_action {
-                Some(reverse) => matches!(self.dispatch(reverse, brp_client, false).await, Ok(r) if r.success),
+                Some(reverse) => {
+                    matches!(self.dispatch(reverse, brp_client, false).await, Ok(r) if r.success)
+                }
                 None => false,
             };
             if reversed {
@@ -962,17 +990,21 @@ mod tests {
         let executor = ActionExecutor::new();
 
         // Valid component type
-        assert!(executor
-            .validate_component_type(&"Transform".to_string())
-            .is_ok());
+        assert!(
+            executor
+                .validate_component_type(&"Transform".to_string())
+                .is_ok()
+        );
 
         // Empty component type
         assert!(executor.validate_component_type(&"".to_string()).is_err());
 
         // Unknown but valid component type
-        assert!(executor
-            .validate_component_type(&"CustomComponent".to_string())
-            .is_ok());
+        assert!(
+            executor
+                .validate_component_type(&"CustomComponent".to_string())
+                .is_ok()
+        );
     }
 
     #[test]

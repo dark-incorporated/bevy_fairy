@@ -185,8 +185,12 @@ impl Assertion {
     /// action runs: the actions change the live game, so a bad condition must not cost a mutation.
     pub fn check(&self) -> Result<()> {
         match self {
-            Self::EntityExists { component_types, .. } => {
-                if component_types.is_empty() || component_types.iter().any(|name| name.trim().is_empty()) {
+            Self::EntityExists {
+                component_types, ..
+            } => {
+                if component_types.is_empty()
+                    || component_types.iter().any(|name| name.trim().is_empty())
+                {
                     return Err(Error::Validation(
                         "entity_exists needs at least one component type name in component_types (as a list), none of them empty: with no component to require, any entity satisfies it. Example: entity_exists:game::Crate".to_string(),
                     ));
@@ -213,7 +217,11 @@ impl Assertion {
                 }
             }
             Self::ActionSucceeds { action } => {
-                if action.component_types().iter().any(|name| name.trim().is_empty()) {
+                if action
+                    .component_types()
+                    .iter()
+                    .any(|name| name.trim().is_empty())
+                {
                     return Err(Error::Validation(
                         "action_succeeds names a component with an empty type_id; the server would refuse the action every time, which reads as the action failing".to_string(),
                     ));
@@ -237,16 +245,17 @@ impl Assertion {
     /// Every component name the condition reads from the game.
     pub fn component_names(&self) -> Vec<&str> {
         match self {
-            Self::EntityExists { component_types, .. } => {
-                component_types.iter().map(String::as_str).collect()
-            }
+            Self::EntityExists {
+                component_types, ..
+            } => component_types.iter().map(String::as_str).collect(),
             Self::ComponentEquals { component_type, .. }
             | Self::ComponentMatches { component_type, .. } => vec![component_type.as_str()],
             Self::PerformanceWithin { .. } => Vec::new(),
             Self::ActionSucceeds { action } => action.component_types(),
-            Self::All { assertions } | Self::Any { assertions } => {
-                assertions.iter().flat_map(Assertion::component_names).collect()
-            }
+            Self::All { assertions } | Self::Any { assertions } => assertions
+                .iter()
+                .flat_map(Assertion::component_names)
+                .collect(),
             Self::Not { assertion } => assertion.component_names(),
         }
     }
@@ -434,7 +443,8 @@ fn same_value(game: &serde_json::Value, expected: &serde_json::Value) -> bool {
         }
         (Value::Object(a), Value::Object(b)) => {
             a.len() == b.len()
-                && a.iter().all(|(key, a)| b.get(key).is_some_and(|b| same_value(a, b)))
+                && a.iter()
+                    .all(|(key, a)| b.get(key).is_some_and(|b| same_value(a, b)))
         }
         _ => game == expected,
     }
@@ -469,7 +479,10 @@ pub fn require_registered(names: &[&str], registered: &[String]) -> Result<()> {
         if registered.iter().any(|path| path == name) {
             continue;
         }
-        let sharing: Vec<&String> = registered.iter().filter(|path| short(path) == *name).collect();
+        let sharing: Vec<&String> = registered
+            .iter()
+            .filter(|path| short(path) == *name)
+            .collect();
         match sharing.as_slice() {
             [_] => {}
             [] => {
@@ -478,7 +491,8 @@ pub fn require_registered(names: &[&str], registered: &[String]) -> Result<()> {
                     .iter()
                     .filter(|path| {
                         let candidate = short(path).to_lowercase();
-                        !wanted.is_empty() && (candidate.contains(&wanted) || wanted.contains(&candidate))
+                        !wanted.is_empty()
+                            && (candidate.contains(&wanted) || wanted.contains(&candidate))
                     })
                     .map(String::as_str)
                     .collect();
@@ -563,7 +577,6 @@ pub enum VariationStrategy {
     },
 }
 
-
 /// Apply `f` to every number, string and boolean inside `value`, however deeply it is nested in
 /// objects and arrays. A Bevy component is nearly always a struct, so what a variation has to
 /// change sits one or more levels below the component's value.
@@ -629,7 +642,14 @@ fn number_like(like: &serde_json::Number, value: f64) -> serde_json::Value {
 /// the caller listed (`grid`, `boundary`) are written as given and never go through this.
 fn drawn_like(like: &serde_json::Number, value: f64) -> serde_json::Value {
     let integer_literal = like.is_i64() || like.is_u64();
-    number_like(like, if integer_literal { value.round() } else { value })
+    number_like(
+        like,
+        if integer_literal {
+            value.round()
+        } else {
+            value
+        },
+    )
 }
 
 /// Which kinds of value a list of actions writes.
@@ -702,7 +722,9 @@ impl VariationStrategy {
                             let pick = rng.random_range(0..string_pool.len());
                             *leaf = Value::String(string_pool[pick].clone());
                         }
-                        Value::Bool(_) => *leaf = Value::Bool(rng.random::<f64>() < *bool_probability),
+                        Value::Bool(_) => {
+                            *leaf = Value::Bool(rng.random::<f64>() < *bool_probability)
+                        }
                         _ => {}
                     }));
                 }
@@ -715,7 +737,8 @@ impl VariationStrategy {
                 // Combinations of the kinds of value the actions write that the caller gave values
                 // for. A kind they do not write multiplies nothing, and a kind with no values is
                 // left as it is: either would only repeat identical iterations, or empty the plan.
-                let tries = |written: bool, listed: usize| if written && listed > 0 { listed } else { 1 };
+                let tries =
+                    |written: bool, listed: usize| if written && listed > 0 { listed } else { 1 };
                 let n = tries(kinds.numbers, numeric_values.len());
                 let s = tries(kinds.strings, string_values.len());
                 let b = tries(kinds.booleans, bool_values.len());
@@ -731,7 +754,9 @@ impl VariationStrategy {
                         Value::String(_) if !string_values.is_empty() => {
                             *leaf = Value::String(string_values[str_idx].clone());
                         }
-                        Value::Bool(_) if !bool_values.is_empty() => *leaf = Value::Bool(bool_values[bool_idx]),
+                        Value::Bool(_) if !bool_values.is_empty() => {
+                            *leaf = Value::Bool(bool_values[bool_idx])
+                        }
                         _ => {}
                     }));
                 }
@@ -747,7 +772,12 @@ impl VariationStrategy {
                 // One iteration per boundary number. Actions that write no number have only the
                 // empty string to try, once.
                 let numbers: Vec<Option<f64>> = if kinds.numbers {
-                    boundary_values.iter().take(count).copied().map(Some).collect()
+                    boundary_values
+                        .iter()
+                        .take(count)
+                        .copied()
+                        .map(Some)
+                        .collect()
                 } else {
                     vec![None; count.min(1)]
                 };
@@ -775,7 +805,9 @@ impl VariationStrategy {
                     for _ in 0..mutations {
                         if rng.random::<f64>() < *mutation_probability {
                             for action in &mut variant {
-                                for_each_written_leaf(action, &mut |leaf| Self::fuzz_leaf(leaf, &mut rng));
+                                for_each_written_leaf(action, &mut |leaf| {
+                                    Self::fuzz_leaf(leaf, &mut rng)
+                                });
                             }
                         }
                     }
@@ -996,7 +1028,8 @@ impl TestRunner {
                 match executor.execute_action(action, &mut client).await {
                     Ok(action_result) => {
                         if !action_result.success {
-                            action_error = Some(action_result.error.unwrap_or(action_result.message));
+                            action_error =
+                                Some(action_result.error.unwrap_or(action_result.message));
                             break;
                         }
                     }
@@ -1012,7 +1045,11 @@ impl TestRunner {
             // would fail the same way, and what was counted so far is still a result.
             let outcome = match action_error {
                 Some(error) => Err((error, false)),
-                None => match hypothesis.success_condition.evaluate(&mut client, &mut restoration).await {
+                None => match hypothesis
+                    .success_condition
+                    .evaluate(&mut client, &mut restoration)
+                    .await
+                {
                     Ok(met) => Ok(met),
                     Err(e) => Err((format!("the condition could not be read: {e}"), true)),
                 },
@@ -1031,7 +1068,10 @@ impl TestRunner {
                 Err((error, fatal)) => {
                     not_evaluated += 1;
                     if fatal {
-                        stopped_early = Some(format!("{error}; the run stopped after iteration {} of {planned}", i + 1));
+                        stopped_early = Some(format!(
+                            "{error}; the run stopped after iteration {} of {planned}",
+                            i + 1
+                        ));
                     }
                     if examples.len() < 5 {
                         examples.push(FailureExample {
@@ -1103,9 +1143,7 @@ impl TestRunner {
             stopped_early,
         };
 
-        info!(
-            "Test completed: {held} held, {violated} violated, {not_evaluated} not evaluated"
-        );
+        info!("Test completed: {held} held, {violated} violated, {not_evaluated} not evaluated");
 
         Ok(result)
     }
@@ -1128,8 +1166,16 @@ impl TestRunner {
         let half = 1.96 * (p * (1.0 - p) / n + z2 / (4.0 * n * n)).sqrt() / denominator;
 
         // Exactly 0 and 1 at the ends: the formula gives them up to rounding.
-        let lower = if successes == 0 { 0.0 } else { (centre - half).max(0.0) };
-        let upper = if successes == total { 1.0 } else { (centre + half).min(1.0) };
+        let lower = if successes == 0 {
+            0.0
+        } else {
+            (centre - half).max(0.0)
+        };
+        let upper = if successes == total {
+            1.0
+        } else {
+            (centre + half).min(1.0)
+        };
         (lower, upper)
     }
 }
@@ -1399,7 +1445,10 @@ mod tests {
     fn modify(value: serde_json::Value) -> Action {
         Action::Modify {
             entity_id: 7,
-            components: vec![ComponentSpec { type_id: "game::C".to_string(), value }],
+            components: vec![ComponentSpec {
+                type_id: "game::C".to_string(),
+                value,
+            }],
         }
     }
 
@@ -1412,21 +1461,52 @@ mod tests {
 
     #[test]
     fn every_strategy_varies_the_fields_inside_objects_and_arrays() {
-        let base = vec![modify(serde_json::json!({"weight": 5.0, "count": 3, "tags": [1.5, "a"], "on": true}))];
+        let base = vec![modify(
+            serde_json::json!({"weight": 5.0, "count": 3, "tags": [1.5, "a"], "on": true}),
+        )];
         let strategies = [
-            VariationStrategy::Random { numeric_range: (10.0, 20.0), string_pool: vec!["x".into()], bool_probability: 0.5 },
-            VariationStrategy::Grid { numeric_values: vec![10.0], string_values: vec!["x".into()], bool_values: vec![false] },
-            VariationStrategy::Boundary { include_zero: true, include_negative: true, include_max: false, include_empty: true },
-            VariationStrategy::Fuzz { max_mutations: 3, mutation_probability: 1.0 },
+            VariationStrategy::Random {
+                numeric_range: (10.0, 20.0),
+                string_pool: vec!["x".into()],
+                bool_probability: 0.5,
+            },
+            VariationStrategy::Grid {
+                numeric_values: vec![10.0],
+                string_values: vec!["x".into()],
+                bool_values: vec![false],
+            },
+            VariationStrategy::Boundary {
+                include_zero: true,
+                include_negative: true,
+                include_max: false,
+                include_empty: true,
+            },
+            VariationStrategy::Fuzz {
+                max_mutations: 3,
+                mutation_probability: 1.0,
+            },
         ];
         for strategy in strategies {
             let variations = strategy.generate_variations(&base, 3, 42);
             assert!(!variations.is_empty(), "{}", strategy.name());
             for variant in &variations {
                 let value = written(&variant[0]);
-                assert_ne!(value, written(&base[0]), "{} left the component as given", strategy.name());
-                assert!(value["weight"].is_f64(), "{}: a float stays a float: {value}", strategy.name());
-                assert!(value["tags"][0].is_number() && value["tags"][1].is_string(), "{}: arrays are varied too: {value}", strategy.name());
+                assert_ne!(
+                    value,
+                    written(&base[0]),
+                    "{} left the component as given",
+                    strategy.name()
+                );
+                assert!(
+                    value["weight"].is_f64(),
+                    "{}: a float stays a float: {value}",
+                    strategy.name()
+                );
+                assert!(
+                    value["tags"][0].is_number() && value["tags"][1].is_string(),
+                    "{}: arrays are varied too: {value}",
+                    strategy.name()
+                );
             }
         }
     }
@@ -1435,23 +1515,59 @@ mod tests {
     fn random_and_fuzz_round_over_an_integer_literal_and_grid_and_boundary_write_what_was_listed() {
         let base = vec![modify(serde_json::json!({"count": 3}))];
         let whole = |value: &serde_json::Value| value["count"].is_i64() || value["count"].is_u64();
-        let random = VariationStrategy::Random { numeric_range: (0.0, 100.0), string_pool: vec![], bool_probability: 0.5 };
-        let fuzz = VariationStrategy::Fuzz { max_mutations: 3, mutation_probability: 1.0 };
+        let random = VariationStrategy::Random {
+            numeric_range: (0.0, 100.0),
+            string_pool: vec![],
+            bool_probability: 0.5,
+        };
+        let fuzz = VariationStrategy::Fuzz {
+            max_mutations: 3,
+            mutation_probability: 1.0,
+        };
         for strategy in [random, fuzz] {
             for variant in strategy.generate_variations(&base, 20, 7) {
-                assert!(whole(written(&variant[0])), "{}: a draw over an integer literal is an integer", strategy.name());
+                assert!(
+                    whole(written(&variant[0])),
+                    "{}: a draw over an integer literal is an integer",
+                    strategy.name()
+                );
             }
         }
         // The values the caller listed are not rounded: 0.5 over `3` is 0.5, and 10 stays `10`.
-        let grid = VariationStrategy::Grid { numeric_values: vec![0.5, 10.0], string_values: vec![], bool_values: vec![] };
-        let written_counts: Vec<serde_json::Value> =
-            grid.generate_variations(&base, 5, 1).iter().map(|v| written(&v[0])["count"].clone()).collect();
-        assert_eq!(written_counts, vec![serde_json::json!(0.5), serde_json::json!(10)]);
+        let grid = VariationStrategy::Grid {
+            numeric_values: vec![0.5, 10.0],
+            string_values: vec![],
+            bool_values: vec![],
+        };
+        let written_counts: Vec<serde_json::Value> = grid
+            .generate_variations(&base, 5, 1)
+            .iter()
+            .map(|v| written(&v[0])["count"].clone())
+            .collect();
+        assert_eq!(
+            written_counts,
+            vec![serde_json::json!(0.5), serde_json::json!(10)]
+        );
         assert!(written_counts[1].is_u64());
-        let boundary = VariationStrategy::Boundary { include_zero: true, include_negative: false, include_max: false, include_empty: false };
-        let first: Vec<serde_json::Value> =
-            boundary.generate_variations(&base, 3, 1).iter().map(|v| written(&v[0])["count"].clone()).collect();
-        assert_eq!(first, vec![serde_json::json!(0), serde_json::json!(0.0001), serde_json::json!(-0.0001)]);
+        let boundary = VariationStrategy::Boundary {
+            include_zero: true,
+            include_negative: false,
+            include_max: false,
+            include_empty: false,
+        };
+        let first: Vec<serde_json::Value> = boundary
+            .generate_variations(&base, 3, 1)
+            .iter()
+            .map(|v| written(&v[0])["count"].clone())
+            .collect();
+        assert_eq!(
+            first,
+            vec![
+                serde_json::json!(0),
+                serde_json::json!(0.0001),
+                serde_json::json!(-0.0001)
+            ]
+        );
     }
 
     #[test]
@@ -1462,12 +1578,19 @@ mod tests {
             string_values: vec!["default".into()],
             bool_values: vec![true, false],
         };
-        let variations = grid.generate_variations(&[modify(serde_json::json!({"weight": 5.0}))], 100, 1);
+        let variations =
+            grid.generate_variations(&[modify(serde_json::json!({"weight": 5.0}))], 100, 1);
         assert_eq!(variations.len(), 2);
 
         // A string with no listed values is not overwritten, and an empty list does not empty the plan.
-        let grid = VariationStrategy::Grid { numeric_values: vec![10.0, 20.0], string_values: vec![], bool_values: vec![] };
-        let base = [modify(serde_json::json!({"weight": 5.0, "mode": "Fast", "on": true}))];
+        let grid = VariationStrategy::Grid {
+            numeric_values: vec![10.0, 20.0],
+            string_values: vec![],
+            bool_values: vec![],
+        };
+        let base = [modify(
+            serde_json::json!({"weight": 5.0, "mode": "Fast", "on": true}),
+        )];
         let variations = grid.generate_variations(&base, 100, 1);
         assert_eq!(variations.len(), 2);
         for variant in &variations {
@@ -1478,19 +1601,49 @@ mod tests {
 
     #[test]
     fn boundary_has_no_infinity_and_each_flag_adds_only_its_own_values() {
-        let strategy = VariationStrategy::Boundary { include_zero: false, include_negative: false, include_max: false, include_empty: false };
+        let strategy = VariationStrategy::Boundary {
+            include_zero: false,
+            include_negative: false,
+            include_max: false,
+            include_empty: false,
+        };
         let values = strategy.get_boundary_values(false, false, false);
-        assert_eq!(values, vec![1.0, 255.0, 65535.0], "no zero, no negative, no maximum was asked for");
+        assert_eq!(
+            values,
+            vec![1.0, 255.0, 65535.0],
+            "no zero, no negative, no maximum was asked for"
+        );
         let all = strategy.get_boundary_values(true, true, true);
-        assert!(all.iter().all(|v| v.is_finite()), "JSON cannot carry an infinity: {all:?}");
+        assert!(
+            all.iter().all(|v| v.is_finite()),
+            "JSON cannot carry an infinity: {all:?}"
+        );
         assert!(all.contains(&-1.0) && all.contains(&0.0) && all.contains(&f64::MAX));
     }
 
     #[test]
     fn fuzz_never_changes_which_entity_a_delete_targets() {
-        let strategy = VariationStrategy::Fuzz { max_mutations: 5, mutation_probability: 1.0 };
-        for variant in strategy.generate_variations(&[Action::Delete { entity_id: 4294967297 }], 20, 9) {
-            assert!(matches!(variant[0], Action::Delete { entity_id: 4294967297 }), "{:?}", variant[0]);
+        let strategy = VariationStrategy::Fuzz {
+            max_mutations: 5,
+            mutation_probability: 1.0,
+        };
+        for variant in strategy.generate_variations(
+            &[Action::Delete {
+                entity_id: 4294967297,
+            }],
+            20,
+            9,
+        ) {
+            assert!(
+                matches!(
+                    variant[0],
+                    Action::Delete {
+                        entity_id: 4294967297
+                    }
+                ),
+                "{:?}",
+                variant[0]
+            );
         }
     }
 
@@ -1499,7 +1652,11 @@ mod tests {
     /// evaluated, and it ends the run, with the reason.
     #[tokio::test]
     async fn a_condition_that_cannot_be_read_ends_the_run_with_what_was_counted() {
-        let port = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
+        let port = std::net::TcpListener::bind("127.0.0.1:0")
+            .unwrap()
+            .local_addr()
+            .unwrap()
+            .port();
         let config = crate::server::config::Config {
             bevy_brp_host: "127.0.0.1".to_string(),
             bevy_brp_port: port,
@@ -1507,15 +1664,27 @@ mod tests {
         };
         let client = RwLock::new(BrpClient::new(&config));
         let hypothesis = Hypothesis::builder("a crate exists".to_string())
-            .with_condition(Assertion::EntityExists { component_types: vec!["game::Crate".to_string()], count: None })
+            .with_condition(Assertion::EntityExists {
+                component_types: vec!["game::Crate".to_string()],
+                count: None,
+            })
             .build()
             .unwrap();
 
-        let result = TestRunner::with_config(1, Duration::from_secs(5)).run(&hypothesis, &client).await.unwrap();
+        let result = TestRunner::with_config(1, Duration::from_secs(5))
+            .run(&hypothesis, &client)
+            .await
+            .unwrap();
 
-        assert_eq!((result.held, result.violated, result.not_evaluated), (0, 0, 1));
+        assert_eq!(
+            (result.held, result.violated, result.not_evaluated),
+            (0, 0, 1)
+        );
         assert!(
-            result.stopped_early.as_deref().is_some_and(|why| why.contains("could not be read")),
+            result
+                .stopped_early
+                .as_deref()
+                .is_some_and(|why| why.contains("could not be read")),
             "{:?}",
             result.stopped_early
         );
@@ -1546,10 +1715,16 @@ mod tests {
     fn numbers_are_the_same_value_however_they_are_written() {
         use serde_json::json;
         assert!(same_value(&json!(3.0), &json!(3)));
-        assert!(same_value(&json!({"weight": 3.0, "tags": [1.0, "a"]}), &json!({"tags": [1, "a"], "weight": 3})));
+        assert!(same_value(
+            &json!({"weight": 3.0, "tags": [1.0, "a"]}),
+            &json!({"tags": [1, "a"], "weight": 3})
+        ));
         assert!(!same_value(&json!(3.5), &json!(3)));
         assert!(!same_value(&json!(3.0), &json!("3")));
-        assert!(!same_value(&json!({"weight": 3.0}), &json!({"weight": 3, "extra": 1})));
+        assert!(!same_value(
+            &json!({"weight": 3.0}),
+            &json!({"weight": 3, "extra": 1})
+        ));
     }
 
     #[test]
@@ -1558,10 +1733,20 @@ mod tests {
             .map(String::from)
             .to_vec();
         assert!(require_registered(&["game::Crate", "Score", "a::Health"], &registered).is_ok());
-        let unknown = require_registered(&["Crat"], &registered).unwrap_err().to_string();
-        assert!(unknown.contains("not registered") && unknown.contains("game::Crate"), "{unknown}");
-        let ambiguous = require_registered(&["Health"], &registered).unwrap_err().to_string();
-        assert!(ambiguous.contains("a::Health") && ambiguous.contains("b::Health"), "{ambiguous}");
+        let unknown = require_registered(&["Crat"], &registered)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            unknown.contains("not registered") && unknown.contains("game::Crate"),
+            "{unknown}"
+        );
+        let ambiguous = require_registered(&["Health"], &registered)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            ambiguous.contains("a::Health") && ambiguous.contains("b::Health"),
+            "{ambiguous}"
+        );
     }
 
     #[test]

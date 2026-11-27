@@ -1,4 +1,4 @@
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
@@ -7,7 +7,7 @@ use crate::server::brp_client::BrpClient;
 use crate::server::error::{Error, Result};
 use crate::server::experiment_system::Action;
 use crate::server::hypothesis_system::{
-    registered_components, require_registered, Assertion, Hypothesis, TestRunner, VariationStrategy,
+    Assertion, Hypothesis, TestRunner, VariationStrategy, registered_components, require_registered,
 };
 
 /// Handle hypothesis tool requests
@@ -244,9 +244,13 @@ fn parse_success_condition(arguments: &Value) -> Result<Assertion> {
     const SHAPES: &str = "a string (\"entity_exists:game::Crate,game::Health\" or \"component_equals:game::Score=100\") or an object whose \"type\" is one of entity_exists, component_equals, performance_within (entity_count or component_count), action_succeeds, all, any, not. Example: {\"type\": \"entity_exists\", \"component_types\": [\"game::Crate\"], \"count\": 6}";
     match arguments.get("success_condition") {
         Some(Value::String(condition)) => Assertion::parse(condition),
-        Some(condition @ Value::Object(_)) => serde_json::from_value(condition.clone()).map_err(|e| {
-            Error::Validation(format!("Invalid success_condition {condition}: {e}. A condition is {SHAPES}"))
-        }),
+        Some(condition @ Value::Object(_)) => {
+            serde_json::from_value(condition.clone()).map_err(|e| {
+                Error::Validation(format!(
+                    "Invalid success_condition {condition}: {e}. A condition is {SHAPES}"
+                ))
+            })
+        }
         _ => Err(Error::Validation(format!(
             "Missing or invalid 'success_condition'. A condition is {SHAPES}"
         ))),
@@ -384,7 +388,10 @@ fn parse_variation_strategy(arguments: &Value) -> Result<VariationStrategy> {
 
 /// A probability argument: `default` when absent, an error naming it when outside 0 to 1.
 fn probability(arguments: &Value, name: &str, default: f64) -> Result<f64> {
-    let value = arguments.get(name).and_then(|p| p.as_f64()).unwrap_or(default);
+    let value = arguments
+        .get(name)
+        .and_then(|p| p.as_f64())
+        .unwrap_or(default);
     if (0.0..=1.0).contains(&value) {
         Ok(value)
     } else {
@@ -405,9 +412,11 @@ mod tests {
             bevy_brp_host: "localhost".to_string(),
             bevy_brp_port: 15702,
             mcp_port: 3000,
-        ..Default::default()
+            ..Default::default()
         };
-        let brp_client = Arc::new(RwLock::new(crate::server::brp_client::BrpClient::new(&config)));
+        let brp_client = Arc::new(RwLock::new(crate::server::brp_client::BrpClient::new(
+            &config,
+        )));
 
         let args = json!({
             "action": "test",
@@ -425,9 +434,11 @@ mod tests {
             bevy_brp_host: "localhost".to_string(),
             bevy_brp_port: 15702,
             mcp_port: 3000,
-        ..Default::default()
+            ..Default::default()
         };
-        let brp_client = Arc::new(RwLock::new(crate::server::brp_client::BrpClient::new(&config)));
+        let brp_client = Arc::new(RwLock::new(crate::server::brp_client::BrpClient::new(
+            &config,
+        )));
 
         let args = json!({
             "action": "validate",

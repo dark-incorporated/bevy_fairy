@@ -138,55 +138,64 @@ impl Config {
             .map_err(|_| Error::Config("Invalid MCP_PORT".to_string()))?;
 
         let mut resilience = ResilienceConfig::default();
-        
+
         // Parse resilience configuration from environment
         if let Ok(val) = env::var("BRP_CIRCUIT_BREAKER_THRESHOLD") {
-            resilience.circuit_breaker.failure_threshold = val.parse()
+            resilience.circuit_breaker.failure_threshold = val
+                .parse()
                 .map_err(|_| Error::Config("Invalid BRP_CIRCUIT_BREAKER_THRESHOLD".to_string()))?;
         }
-        
+
         if let Ok(val) = env::var("BRP_CIRCUIT_BREAKER_RESET_TIMEOUT") {
-            let seconds: u64 = val.parse()
-                .map_err(|_| Error::Config("Invalid BRP_CIRCUIT_BREAKER_RESET_TIMEOUT".to_string()))?;
+            let seconds: u64 = val.parse().map_err(|_| {
+                Error::Config("Invalid BRP_CIRCUIT_BREAKER_RESET_TIMEOUT".to_string())
+            })?;
             resilience.circuit_breaker.reset_timeout = Duration::from_secs(seconds);
         }
-        
+
         if let Ok(val) = env::var("BRP_MAX_CONNECTIONS") {
-            resilience.connection_pool.max_connections = val.parse()
+            resilience.connection_pool.max_connections = val
+                .parse()
                 .map_err(|_| Error::Config("Invalid BRP_MAX_CONNECTIONS".to_string()))?;
         }
-        
+
         if let Ok(val) = env::var("BRP_CONNECTION_TIMEOUT") {
-            let seconds: u64 = val.parse()
+            let seconds: u64 = val
+                .parse()
                 .map_err(|_| Error::Config("Invalid BRP_CONNECTION_TIMEOUT".to_string()))?;
             resilience.connection_pool.connection_timeout = Duration::from_secs(seconds);
         }
-        
+
         if let Ok(val) = env::var("BRP_HEARTBEAT_INTERVAL") {
-            let seconds: u64 = val.parse()
+            let seconds: u64 = val
+                .parse()
                 .map_err(|_| Error::Config("Invalid BRP_HEARTBEAT_INTERVAL".to_string()))?;
             resilience.heartbeat.interval = Duration::from_secs(seconds);
         }
-        
+
         if let Ok(val) = env::var("BRP_HEARTBEAT_TIMEOUT") {
-            let seconds: u64 = val.parse()
+            let seconds: u64 = val
+                .parse()
                 .map_err(|_| Error::Config("Invalid BRP_HEARTBEAT_TIMEOUT".to_string()))?;
             resilience.heartbeat.timeout = Duration::from_secs(seconds);
         }
-        
+
         if let Ok(val) = env::var("BRP_RETRY_MAX_ATTEMPTS") {
-            resilience.retry.max_attempts = val.parse()
+            resilience.retry.max_attempts = val
+                .parse()
                 .map_err(|_| Error::Config("Invalid BRP_RETRY_MAX_ATTEMPTS".to_string()))?;
         }
-        
+
         if let Ok(val) = env::var("BRP_RETRY_INITIAL_DELAY") {
-            let milliseconds: u64 = val.parse()
+            let milliseconds: u64 = val
+                .parse()
                 .map_err(|_| Error::Config("Invalid BRP_RETRY_INITIAL_DELAY".to_string()))?;
             resilience.retry.initial_delay = Duration::from_millis(milliseconds);
         }
-        
+
         if let Ok(val) = env::var("BRP_RETRY_MAX_DELAY") {
-            let seconds: u64 = val.parse()
+            let seconds: u64 = val
+                .parse()
                 .map_err(|_| Error::Config("Invalid BRP_RETRY_MAX_DELAY".to_string()))?;
             resilience.retry.max_delay = Duration::from_secs(seconds);
         }
@@ -203,29 +212,37 @@ impl Config {
     pub fn brp_url(&self) -> String {
         format!("http://{}:{}", self.bevy_brp_host, self.bevy_brp_port)
     }
-    
+
     /// Validate configuration values
     pub fn validate(&self) -> Result<()> {
         if self.resilience.circuit_breaker.failure_threshold == 0 {
-            return Err(Error::Config("Circuit breaker failure threshold must be > 0".to_string()));
+            return Err(Error::Config(
+                "Circuit breaker failure threshold must be > 0".to_string(),
+            ));
         }
-        
+
         if self.resilience.connection_pool.max_connections == 0 {
             return Err(Error::Config("Max connections must be > 0".to_string()));
         }
-        
-        if self.resilience.connection_pool.max_connections < self.resilience.connection_pool.min_connections {
-            return Err(Error::Config("Max connections must be >= min connections".to_string()));
+
+        if self.resilience.connection_pool.max_connections
+            < self.resilience.connection_pool.min_connections
+        {
+            return Err(Error::Config(
+                "Max connections must be >= min connections".to_string(),
+            ));
         }
-        
+
         if self.resilience.retry.max_attempts == 0 {
             return Err(Error::Config("Retry max attempts must be > 0".to_string()));
         }
-        
+
         if self.resilience.heartbeat.max_missed == 0 {
-            return Err(Error::Config("Heartbeat max missed must be > 0".to_string()));
+            return Err(Error::Config(
+                "Heartbeat max missed must be > 0".to_string(),
+            ));
         }
-        
+
         Ok(())
     }
 }

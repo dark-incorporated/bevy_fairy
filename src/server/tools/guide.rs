@@ -34,7 +34,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::debug;
 
-use crate::server::brp::{refusal_text, BrpPayload, BrpRequest};
+use crate::server::brp::{BrpPayload, BrpRequest, refusal_text};
 use crate::server::brp_client::BrpClient;
 use crate::server::error::{Error, Result};
 

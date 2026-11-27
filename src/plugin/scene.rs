@@ -34,7 +34,7 @@
 use bevy::prelude::*;
 use bevy::remote::{BrpResult, RemoteMethodSystemId, RemoteMethods};
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use crate::plugin::commands::DebugCommands;
 use crate::plugin::ready::DebugReady;
@@ -98,8 +98,7 @@ pub(crate) fn load(path: &str) -> Result<Vec<SceneStep>, String> {
     if version != Some(u64::from(VERSION)) {
         return Err(format!("version is {version:?}, expected {VERSION}"));
     }
-    let file: SceneFile =
-        serde_json::from_value(value).map_err(|e| format!("bad steps: {e}"))?;
+    let file: SceneFile = serde_json::from_value(value).map_err(|e| format!("bad steps: {e}"))?;
     Ok(file.steps)
 }
 
@@ -129,7 +128,10 @@ pub(crate) fn start_playback(app: &mut App, path: &str) {
         }
         Err(why) => {
             error!("bevy_fairy: scene {path}: {why}");
-            app.world_mut().insert_resource(SceneRejected { path: path.to_string(), why });
+            app.world_mut().insert_resource(SceneRejected {
+                path: path.to_string(),
+                why,
+            });
         }
     }
 }
@@ -137,12 +139,16 @@ pub(crate) fn start_playback(app: &mut App, path: &str) {
 /// BRP handler: `bevy_fairy/scene`. `{"action": "get"}` returns the recorded calls in file format.
 /// `{"action": "clear"}` empties the log.
 pub(crate) fn handle_scene(In(params): In<Option<Value>>, mut log: ResMut<SceneLog>) -> BrpResult {
-    let params: SceneParams = serde_json::from_value(params.unwrap_or_else(|| json!({}))).map_err(|e| {
-        crate::plugin::brp_error(
-            bevy::remote::error_codes::INVALID_PARAMS,
-            format!("bevy_fairy/scene: {e}; example: {}", json!({"action": "get"})),
-        )
-    })?;
+    let params: SceneParams =
+        serde_json::from_value(params.unwrap_or_else(|| json!({}))).map_err(|e| {
+            crate::plugin::brp_error(
+                bevy::remote::error_codes::INVALID_PARAMS,
+                format!(
+                    "bevy_fairy/scene: {e}; example: {}",
+                    json!({"action": "get"})
+                ),
+            )
+        })?;
     match params.action.as_str() {
         "get" => Ok(scene_json(&log.0)),
         "clear" => {
@@ -177,7 +183,10 @@ pub(crate) fn replay_next_step(world: &mut World) {
     playback.next += 1;
     if let Err(why) = &outcome {
         playback.failed += 1;
-        warn!("bevy_fairy: scene step {} ({}) failed: {why}", playback.next, step.method);
+        warn!(
+            "bevy_fairy: scene step {} ({}) failed: {why}",
+            playback.next, step.method
+        );
     }
     if playback.next == playback.steps.len() {
         info!(
@@ -197,7 +206,10 @@ fn run_step(world: &mut World, step: &SceneStep) -> Result<(), String> {
         .get_resource::<DebugCommands>()
         .is_some_and(|commands| commands.iter().any(|c| c.name == step.method && c.records));
     if !recorded {
-        return Err(format!("{} is not a recorded debug command here", step.method));
+        return Err(format!(
+            "{} is not a recorded debug command here",
+            step.method
+        ));
     }
     let id = match world
         .get_resource::<RemoteMethods>()
@@ -219,7 +231,10 @@ mod tests {
 
     #[test]
     fn scene_json_has_the_format_and_version() {
-        let steps = vec![SceneStep { method: "demo/x".into(), params: json!({"n": 1}) }];
+        let steps = vec![SceneStep {
+            method: "demo/x".into(),
+            params: json!({"n": 1}),
+        }];
         let file = scene_json(&steps);
         assert_eq!(file["format"], FORMAT);
         assert_eq!(file["version"], VERSION);

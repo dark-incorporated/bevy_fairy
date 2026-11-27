@@ -14,20 +14,19 @@ pub mod prelude {
     pub use crate::server::brp_client::BrpClient;
     pub use crate::server::brp_messages::{BrpRequest, BrpResponse};
     pub use crate::server::error::{Error, Result};
-    pub use crate::server::query_parser::{QueryParser, RegexQueryParser};
     pub use crate::server::experiment_system::{Action, ActionExecutor, ActionResult};
     pub use crate::server::hypothesis_system::{Hypothesis, TestResult, TestRunner};
-    pub use crate::server::timeline_branching::{BranchId, TimelineBranchManager};
-    pub use crate::server::recording_system::{Recording, RecordingState};
     pub use crate::server::playback_system::PlaybackState;
+    pub use crate::server::query_parser::{QueryParser, RegexQueryParser};
+    pub use crate::server::recording_system::{Recording, RecordingState};
+    pub use crate::server::timeline_branching::{BranchId, TimelineBranchManager};
 }
 
-
 // Core functionality
-pub mod error;
-pub mod config;
 pub mod circuit_breaker;
+pub mod config;
 pub mod contact_sheet;
+pub mod error;
 mod watch_fields;
 
 // Communication
@@ -46,7 +45,6 @@ pub mod mcp_tools;
 
 // Performance budget monitoring
 
-
 // Query and observation
 pub mod query_parser;
 pub mod semantic_analyzer;
@@ -56,10 +54,10 @@ pub mod experiment_system;
 pub mod hypothesis_system;
 
 // State management
-pub mod recording_system;
 pub mod playback_system;
-pub mod timeline_branching;
+pub mod recording_system;
 pub mod state_diff;
+pub mod timeline_branching;
 
 // Analysis and monitoring
 pub mod anomaly_detector;

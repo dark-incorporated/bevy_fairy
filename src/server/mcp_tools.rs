@@ -8,18 +8,23 @@
  * crate in the Bevy ecosystem cannot be adopted, and being adoptable is why it is published.
  */
 
-use rmcp::{model::*, tool, tool_router, handler::server::{ServerHandler, router::tool::ToolRouter, tool::Parameters}, schemars, Error as McpError};
+use rmcp::{
+    Error as McpError,
+    handler::server::{ServerHandler, router::tool::ToolRouter, tool::Parameters},
+    model::*,
+    schemars, tool, tool_router,
+};
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::{sync::Arc, future::Future};
+use std::{future::Future, sync::Arc};
 use tokio::sync::RwLock;
-use tracing::{error, debug};
-use schemars::JsonSchema;
+use tracing::{debug, error};
 
-use crate::server::brp_client::BrpClient;
-use crate::server::tools::{observe, experiment, guide, hypothesis, anomaly};
-use crate::server::experiment_system::Action;
 use crate::server::brp::{BrpPayload, BrpRequest};
+use crate::server::brp_client::BrpClient;
+use crate::server::experiment_system::Action;
+use crate::server::tools::{anomaly, experiment, guide, hypothesis, observe};
 use crate::server::watch_fields;
 use base64::Engine;
 use std::path::{Path, PathBuf};
@@ -388,7 +393,9 @@ const QUIT_METHOD: &str = "bevy_fairy/quit";
 
 /// The text an agent reads when nothing answers. Kept exact, because agents match on it.
 fn no_game_text(url: &str) -> String {
-    format!("bevy-fairy: no game answering at {url} — start the game with DebuggerPlugin and RemoteHttpPlugin, or set BEVY_BRP_HOST/BEVY_BRP_PORT")
+    format!(
+        "bevy-fairy: no game answering at {url} — start the game with DebuggerPlugin and RemoteHttpPlugin, or set BEVY_BRP_HOST/BEVY_BRP_PORT"
+    )
 }
 
 /// What an agent reads when a request did not come back as a reply this server can read, in the
@@ -396,7 +403,12 @@ fn no_game_text(url: &str) -> String {
 /// it, so "no game answering" would send the agent to restart a running game or to send the request
 /// again and apply it twice); the game answered with an HTTP failure; the game answered with a body
 /// that is not `reply`; and only otherwise that nothing answers. `reply` names what was expected.
-fn why_no_reply(client: &BrpClient, method: &str, error: &crate::server::error::Error, reply: &str) -> String {
+fn why_no_reply(
+    client: &BrpClient,
+    method: &str,
+    error: &crate::server::error::Error,
+    reply: &str,
+) -> String {
     use crate::server::error::Error;
     match error {
         Error::Timeout(why) => format!(
@@ -435,7 +447,8 @@ fn tool_err(text: impl Into<String>) -> Result<CallToolResult, McpError> {
 /// fields by hand, means a field added to the schema reaches the handler; a hand-written list was
 /// the second place a field could be added and missed (B-024).
 fn request_args<T: Serialize>(req: &T) -> Result<Value, Result<CallToolResult, McpError>> {
-    serde_json::to_value(req).map_err(|e| tool_err(format!("the request could not be encoded: {e}")))
+    serde_json::to_value(req)
+        .map_err(|e| tool_err(format!("the request could not be encoded: {e}")))
 }
 
 /// A tool handler's answer as a tool result. The handlers report a refusal -- an unknown action,
@@ -451,8 +464,15 @@ fn handler_result(result: Value) -> Result<CallToolResult, McpError> {
 }
 
 fn command_block(entry: &CommandEntry) -> String {
-    let params = if entry.params.is_empty() { "(none)" } else { entry.params.as_str() };
-    format!("{} — {}\n  params: {}\n  example: {}", entry.name, entry.description, params, entry.example)
+    let params = if entry.params.is_empty() {
+        "(none)"
+    } else {
+        entry.params.as_str()
+    };
+    format!(
+        "{} — {}\n  params: {}\n  example: {}",
+        entry.name, entry.description, params, entry.example
+    )
 }
 
 /// Name the closest registered command, and list them all, when `asked` is not one of them.
@@ -463,13 +483,19 @@ fn unknown_command_text(asked: &str, entries: &[CommandEntry]) -> String {
         .copied()
         .max_by(|a, b| strsim::jaro_winkler(asked, a).total_cmp(&strsim::jaro_winkler(asked, b)));
     match closest {
-        Some(closest) => format!("unknown command `{asked}`; did you mean `{closest}`? known: {}", known.join(", ")),
+        Some(closest) => format!(
+            "unknown command `{asked}`; did you mean `{closest}`? known: {}",
+            known.join(", ")
+        ),
         None => format!("unknown command `{asked}`; the game has registered no commands"),
     }
 }
 
 fn write_file_creating_dirs(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
-    if let Some(parent) = path.parent().filter(|parent| !parent.as_os_str().is_empty()) {
+    if let Some(parent) = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+    {
         std::fs::create_dir_all(parent)?;
     }
     std::fs::write(path, bytes)
@@ -480,7 +506,10 @@ fn default_capture_path() -> PathBuf {
     let dir = std::env::var_os("BEVY_FAIRY_CAPTURE_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("debug_captures"));
-    let unix_ms = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or_default();
+    let unix_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or_default();
     dir.join(format!("capture-{unix_ms}.png"))
 }
 
@@ -488,7 +517,10 @@ fn default_burst_dir() -> PathBuf {
     let dir = std::env::var_os("BEVY_FAIRY_CAPTURE_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("debug_captures"));
-    let unix_ms = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or_default();
+    let unix_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or_default();
     dir.join(format!("burst-{unix_ms}"))
 }
 
@@ -546,30 +578,51 @@ impl Captured {
     fn provenance(&self) -> String {
         match (&self.source, self.frame_requested, self.frame_captured) {
             (Some(source), Some(requested), Some(taken)) => {
-                format!("source {source}, requested at frame {requested}, delivered at frame {taken}")
+                format!(
+                    "source {source}, requested at frame {requested}, delivered at frame {taken}"
+                )
             }
-            _ => "source and frame unavailable: this game's plugin does not report them".to_string(),
+            _ => {
+                "source and frame unavailable: this game's plugin does not report them".to_string()
+            }
         }
     }
 }
 
 impl BevyDebuggerTools {
     /// Ask the game for one capture and wait for it (15 s at most).
-    async fn capture_once(&self, params: serde_json::Map<String, Value>) -> Result<Captured, String> {
-        let started = self.call_game(SCREENSHOT_METHOD, Some(Value::Object(params))).await?;
+    async fn capture_once(
+        &self,
+        params: serde_json::Map<String, Value>,
+    ) -> Result<Captured, String> {
+        let started = self
+            .call_game(SCREENSHOT_METHOD, Some(Value::Object(params)))
+            .await?;
         let Some(id) = started.get("id").and_then(Value::as_u64) else {
-            return Err(format!("{SCREENSHOT_METHOD} did not return a capture id: {started}"));
+            return Err(format!(
+                "{SCREENSHOT_METHOD} did not return a capture id: {started}"
+            ));
         };
         let deadline = Instant::now() + Duration::from_secs(15);
         let state = loop {
-            let state = self.call_game(CAPTURE_METHOD, Some(serde_json::json!({"id": id}))).await?;
+            let state = self
+                .call_game(CAPTURE_METHOD, Some(serde_json::json!({"id": id})))
+                .await?;
             match state.get("status").and_then(Value::as_str) {
                 Some("done") => break state,
                 Some("failed") => {
-                    return Err(state.get("error").and_then(Value::as_str).unwrap_or("the capture failed").to_string());
+                    return Err(state
+                        .get("error")
+                        .and_then(Value::as_str)
+                        .unwrap_or("the capture failed")
+                        .to_string());
                 }
                 Some("pending") => {}
-                _ => return Err(format!("{CAPTURE_METHOD} returned an unexpected reply: {state}")),
+                _ => {
+                    return Err(format!(
+                        "{CAPTURE_METHOD} returned an unexpected reply: {state}"
+                    ));
+                }
             }
             if Instant::now() >= deadline {
                 return Err(format!("capture {id} still pending after 15 s"));
@@ -577,10 +630,17 @@ impl BevyDebuggerTools {
             tokio::time::sleep(Duration::from_millis(100)).await;
         };
         let dimension = |key: &str| {
-            state.get(key).and_then(Value::as_u64).ok_or_else(|| format!("{CAPTURE_METHOD} returned no {key}"))
+            state
+                .get(key)
+                .and_then(Value::as_u64)
+                .ok_or_else(|| format!("{CAPTURE_METHOD} returned no {key}"))
         };
         let (width, height) = (dimension("width")?, dimension("height")?);
-        let Some(png_base64) = state.get("png_base64").and_then(Value::as_str).map(str::to_owned) else {
+        let Some(png_base64) = state
+            .get("png_base64")
+            .and_then(Value::as_str)
+            .map(str::to_owned)
+        else {
             return Err(format!("{CAPTURE_METHOD} returned no png_base64"));
         };
         let png = base64::engine::general_purpose::STANDARD
@@ -589,7 +649,9 @@ impl BevyDebuggerTools {
         let picture = match state.get("picture") {
             None => None,
             Some(p) => Some(serde_json::from_value::<[u64; 2]>(p.clone()).map_err(|e| {
-                format!("{CAPTURE_METHOD} returned a picture that is not [width, height]: {p} ({e})")
+                format!(
+                    "{CAPTURE_METHOD} returned a picture that is not [width, height]: {p} ({e})"
+                )
             })?),
         };
         Ok(Captured {
@@ -597,7 +659,10 @@ impl BevyDebuggerTools {
             height,
             png_base64,
             png,
-            source: state.get("source").and_then(Value::as_str).map(str::to_owned),
+            source: state
+                .get("source")
+                .and_then(Value::as_str)
+                .map(str::to_owned),
             frame_requested: state.get("frame_requested").and_then(Value::as_u64),
             frame_captured: state.get("frame_captured").and_then(Value::as_u64),
             picture,
@@ -609,11 +674,27 @@ impl BevyDebuggerTools {
     /// Read `method` between two reads of the game's frame counter, in one HTTP round trip. The
     /// game serves a batch's requests one after another, each possibly on a later frame, so the
     /// value is known only to lie between the two frames. Returns `(frame_before, frame_after, result)`.
-    async fn sample_with_frame(&self, method: &str, params: Option<Value>) -> Result<(u64, u64, Value), String> {
+    async fn sample_with_frame(
+        &self,
+        method: &str,
+        params: Option<Value>,
+    ) -> Result<(u64, u64, Value), String> {
         let requests = [
-            BrpRequest { method: STATUS_METHOD.to_string(), id: Some(Value::from(1)), params: None },
-            BrpRequest { method: method.to_string(), id: Some(Value::from(2)), params },
-            BrpRequest { method: STATUS_METHOD.to_string(), id: Some(Value::from(3)), params: None },
+            BrpRequest {
+                method: STATUS_METHOD.to_string(),
+                id: Some(Value::from(1)),
+                params: None,
+            },
+            BrpRequest {
+                method: method.to_string(),
+                id: Some(Value::from(2)),
+                params,
+            },
+            BrpRequest {
+                method: STATUS_METHOD.to_string(),
+                id: Some(Value::from(3)),
+                params: None,
+            },
         ];
         let mut client = self.brp_client.write().await;
         let answers = match client.send_batch(&requests).await {
@@ -624,7 +705,9 @@ impl BevyDebuggerTools {
         for (request, answer) in requests.iter().zip(answers) {
             match answer.payload {
                 BrpPayload::Result(value) => values.push(value),
-                BrpPayload::Error(err) => return Err(crate::server::brp::refusal_text(&request.method, &err)),
+                BrpPayload::Error(err) => {
+                    return Err(crate::server::brp::refusal_text(&request.method, &err));
+                }
             }
         }
         let after = values.pop().unwrap_or(Value::Null);
@@ -645,7 +728,11 @@ impl BevyDebuggerTools {
     /// nothing answers, the game's own error message verbatim, or -- when the game answered with
     /// something this server cannot read as one JSON-RPC reply -- a message that says exactly that.
     async fn call_game(&self, method: &str, params: Option<Value>) -> Result<Value, String> {
-        let request = BrpRequest { method: method.to_string(), id: Some(Value::from(1)), params };
+        let request = BrpRequest {
+            method: method.to_string(),
+            id: Some(Value::from(1)),
+            params,
+        };
         let mut client = self.brp_client.write().await;
         match client.send_request(&request).await {
             Ok(response) => match response.payload {
@@ -723,7 +810,8 @@ impl BevyDebuggerTools {
             });
         }
         entries.sort_by(|a, b| {
-            (a.name.starts_with("bevy_fairy/"), &a.name).cmp(&(b.name.starts_with("bevy_fairy/"), &b.name))
+            (a.name.starts_with("bevy_fairy/"), &a.name)
+                .cmp(&(b.name.starts_with("bevy_fairy/"), &b.name))
         });
         Ok(entries)
     }
@@ -741,8 +829,7 @@ impl BevyDebuggerTools {
 /// during the tool's own development, to the person it was built for, who asked the reasonable
 /// question -- "how am I supposed to tell you whether it worked? Am I supposed to come back to the
 /// chat?" The answer is yes, and nothing anywhere said so.
-pub const COLLABORATION_PROTOCOL: &str =
-                "Debugging tools for a RUNNING Bevy game, over the Bevy Remote Protocol.\n\n\
+pub const COLLABORATION_PROTOCOL: &str = "Debugging tools for a RUNNING Bevy game, over the Bevy Remote Protocol.\n\n\
                  DRIVING A GAME THAT REGISTERS ITS OWN COMMANDS: call `status` first (is the game up and \
                  ready?), then `commands` (what can be run, with each one's parameters and an example), then \
                  `run` for each step. `screenshot` saves a PNG on this machine, `scene save` writes the \
@@ -784,8 +871,13 @@ pub const COLLABORATION_PROTOCOL: &str =
 #[tool_router]
 impl BevyDebuggerTools {
     /// Read the game's entities with a phrase query
-    #[tool(description = "Read the game's entities with a short phrase query and return them with their component values: every entity, one entity by id, the entities with or without a component, or the registered component types. `diff` compares a read with the previous `diff` read of the same query. The reply says which game frames the read lies between (\"frame\" to \"frame_until\", the counter before and after; the game serves each request on a frame of its own), or \"frame_unavailable\" with the reason when the game does not serve the plugin's status method. Entities only: for a resource use `brp` with world.get_resources, and for a component's fields and their types use `brp` with registry.schema.")]
-    pub async fn observe(&self, Parameters(req): Parameters<ObserveRequest>) -> Result<CallToolResult, McpError> {
+    #[tool(
+        description = "Read the game's entities with a short phrase query and return them with their component values: every entity, one entity by id, the entities with or without a component, or the registered component types. `diff` compares a read with the previous `diff` read of the same query. The reply says which game frames the read lies between (\"frame\" to \"frame_until\", the counter before and after; the game serves each request on a frame of its own), or \"frame_unavailable\" with the reason when the game does not serve the plugin's status method. Entities only: for a resource use `brp` with world.get_resources, and for a component's fields and their types use `brp` with registry.schema."
+    )]
+    pub async fn observe(
+        &self,
+        Parameters(req): Parameters<ObserveRequest>,
+    ) -> Result<CallToolResult, McpError> {
         debug!("Executing observe query: {}", req.query);
 
         let before = self.frame_now().await;
@@ -802,8 +894,13 @@ impl BevyDebuggerTools {
     }
 
     /// Guide a human through the running app
-    #[tool(description = "Guide the HUMAN through something in the running app, and get back what actually happened. This is the only tool here that talks to the person rather than the game: you post a short script, the app draws ONE step at a time over their own window, and it advances itself when a named condition arrives. Use it to walk somebody through reproducing a bug, to hand over an acceptance test, or any time you would otherwise type a numbered list into the chat and hope they map it onto an interface you cannot see.\n\nHOW TO COLLABORATE (this part is not optional -- getting it wrong strands them):\n1. Post steps, then TELL THEM IN CHAT that the guide is up and to look at the app window. They will not know otherwise; nothing pops up to get their attention.\n2. Poll with {read:true}. When it answers waiting_on_a_person:true, that step has NO machine check and will never advance on its own. STOP AND ASK THEM IN CHAT, in words, naming the step. The card tells them 'tell the agent' -- that promise is yours to keep. Only after they answer, call {skip:true}. Any other step is being checked by the app every frame: read names that checkpoint, the app moves the step on itself when it passes, and read carries checkpoint_error when the app cannot run it.\n3. When they say a step made no sense or did not work, that is DATA, not a detour. Record it and fix the step or the app. The transcript is k/n per step -- passes over attempts -- because a boolean 'it worked' is the thing people get wrong.\n4. Never post a step whose checkpoint the app has not registered. The app refuses the whole script by name, lists what would have worked, and posts nothing. One verb per call: steps, read, skip or clear; a call naming two is refused.\n\nWrite steps the way you would brief a colleague: say WHY before what (people ignore a suggestion whose reason they cannot see), two to four short imperatives, and always fill in recovery -- what to do when the step does not work is the field that makes this better than a list in a chat window.")]
-    pub async fn guide(&self, Parameters(req): Parameters<GuideRequest>) -> Result<CallToolResult, McpError> {
+    #[tool(
+        description = "Guide the HUMAN through something in the running app, and get back what actually happened. This is the only tool here that talks to the person rather than the game: you post a short script, the app draws ONE step at a time over their own window, and it advances itself when a named condition arrives. Use it to walk somebody through reproducing a bug, to hand over an acceptance test, or any time you would otherwise type a numbered list into the chat and hope they map it onto an interface you cannot see.\n\nHOW TO COLLABORATE (this part is not optional -- getting it wrong strands them):\n1. Post steps, then TELL THEM IN CHAT that the guide is up and to look at the app window. They will not know otherwise; nothing pops up to get their attention.\n2. Poll with {read:true}. When it answers waiting_on_a_person:true, that step has NO machine check and will never advance on its own. STOP AND ASK THEM IN CHAT, in words, naming the step. The card tells them 'tell the agent' -- that promise is yours to keep. Only after they answer, call {skip:true}. Any other step is being checked by the app every frame: read names that checkpoint, the app moves the step on itself when it passes, and read carries checkpoint_error when the app cannot run it.\n3. When they say a step made no sense or did not work, that is DATA, not a detour. Record it and fix the step or the app. The transcript is k/n per step -- passes over attempts -- because a boolean 'it worked' is the thing people get wrong.\n4. Never post a step whose checkpoint the app has not registered. The app refuses the whole script by name, lists what would have worked, and posts nothing. One verb per call: steps, read, skip or clear; a call naming two is refused.\n\nWrite steps the way you would brief a colleague: say WHY before what (people ignore a suggestion whose reason they cannot see), two to four short imperatives, and always fill in recovery -- what to do when the step does not work is the field that makes this better than a list in a chat window."
+    )]
+    pub async fn guide(
+        &self,
+        Parameters(req): Parameters<GuideRequest>,
+    ) -> Result<CallToolResult, McpError> {
         let mut arguments = serde_json::Map::new();
         if let Some(steps) = req.steps {
             arguments.insert("steps".to_string(), Value::Array(steps));
@@ -832,8 +929,13 @@ impl BevyDebuggerTools {
     }
 
     /// Run controlled experiments on game state
-    #[tool(description = "Change the running game and undo it: spawn, modify, delete or batch entities. `action` picks the operation; `execute` carries the `actions` to run, each a spawn, modify, delete or batch, with component types written as full paths (game::Crate), not short names. The reply lists what each action did, taken from the game's own answer: a spawn names its entity, an action the game or this server refuses is a failed result and the rest still run, and a batch lists its own actions. A batch cannot contain a batch. An atomic batch stops at its first failure and reverses what it ran, saying which results were rolled back. A modify's result carries read_back, the written components read from the game once, a frame or so after the write; its matches is false, and the message says so, when the game does not hold what was written (a system sets the value every frame). A system that changes it later is not seen. `undo` and `redo` step through the recorded actions and answer with action_type undo or redo and of_action, the kind of action they stepped over: a delete cannot be reversed, and a modify only when its components existed before. A redo of a spawn makes a different entity, and the redo entries behind it follow it. The history is kept by this server, not the game, and belongs to the game process that ran its first action (the instance in the game's status). After a game restart `undo` and `redo` are refused and the stale history is discarded, because its entity ids now name other entities; `execute` discards it too and says so in history_discarded; `history` says stale. A game that cannot name its process (no plugin, or an older one) leaves the history unverified: the actions still run, and the reply says why in game_instance_unverified. A game that answered without naming itself cannot later be the one that names itself, so once one does, the history it left is stale. A history recorded against a game that did name itself refuses every action, `execute` too, while that game cannot be asked who it is. `clear_history` discards the history.")]
-    pub async fn experiment(&self, Parameters(req): Parameters<ExperimentRequest>) -> Result<CallToolResult, McpError> {
+    #[tool(
+        description = "Change the running game and undo it: spawn, modify, delete or batch entities. `action` picks the operation; `execute` carries the `actions` to run, each a spawn, modify, delete or batch, with component types written as full paths (game::Crate), not short names. The reply lists what each action did, taken from the game's own answer: a spawn names its entity, an action the game or this server refuses is a failed result and the rest still run, and a batch lists its own actions. A batch cannot contain a batch. An atomic batch stops at its first failure and reverses what it ran, saying which results were rolled back. A modify's result carries read_back, the written components read from the game once, a frame or so after the write; its matches is false, and the message says so, when the game does not hold what was written (a system sets the value every frame). A system that changes it later is not seen. `undo` and `redo` step through the recorded actions and answer with action_type undo or redo and of_action, the kind of action they stepped over: a delete cannot be reversed, and a modify only when its components existed before. A redo of a spawn makes a different entity, and the redo entries behind it follow it. The history is kept by this server, not the game, and belongs to the game process that ran its first action (the instance in the game's status). After a game restart `undo` and `redo` are refused and the stale history is discarded, because its entity ids now name other entities; `execute` discards it too and says so in history_discarded; `history` says stale. A game that cannot name its process (no plugin, or an older one) leaves the history unverified: the actions still run, and the reply says why in game_instance_unverified. A game that answered without naming itself cannot later be the one that names itself, so once one does, the history it left is stale. A history recorded against a game that did name itself refuses every action, `execute` too, while that game cannot be asked who it is. `clear_history` discards the history."
+    )]
+    pub async fn experiment(
+        &self,
+        Parameters(req): Parameters<ExperimentRequest>,
+    ) -> Result<CallToolResult, McpError> {
         debug!("Running experiment action: {}", req.action);
 
         let arguments = match request_args(&req) {
@@ -851,8 +953,13 @@ impl BevyDebuggerTools {
     }
 
     /// Test hypotheses about game behavior
-    #[tool(description = "Test a claim about your game against the running game. `action` picks the operation; `test` needs a `description` of the claim and a `success_condition` that decides it. The condition is a string (entity_exists:game::Crate or component_equals:game::Score=100) or an object whose type is entity_exists, component_equals, performance_within (entity_count or component_count), action_succeeds, all, any or not. A condition that cannot be read as written, or that names a component the game never registered, is refused before anything runs. Each iteration runs the `actions`, reads the condition, then reverses what the actions spawned or modified, so every iteration starts from the game as it was found; game_state in the reply counts what was reversed and what stays applied (a delete cannot be put back). A `variation_type` changes the numbers, strings and booleans inside `actions`; with no actions, or none it can change, the call is refused, because identical iterations are not independent trials. The reply's verdict is CONFIRMED, REJECTED, INCONCLUSIVE or NOT_EVALUATED, and statistics counts each iteration as held, violated, or not_evaluated: an action failed first, so the condition was never read, and the examples carry the game's own message. NOT_EVALUATED says nothing about the claim. success_rate and the interval are over the iterations that read the condition; the verdict counts every planned iteration, so held plus violated below iterations_planned keeps it from CONFIRMED. `timeout` bounds the whole run: when it passes the run stops between iterations (one already started finishes) and stopped_early says so, and other tools are answered between iterations. Without variation there is one iteration, so CONFIRMED means the condition held once when read, and the interval says how little that shows.")]
-    pub async fn hypothesis(&self, Parameters(req): Parameters<HypothesisRequest>) -> Result<CallToolResult, McpError> {
+    #[tool(
+        description = "Test a claim about your game against the running game. `action` picks the operation; `test` needs a `description` of the claim and a `success_condition` that decides it. The condition is a string (entity_exists:game::Crate or component_equals:game::Score=100) or an object whose type is entity_exists, component_equals, performance_within (entity_count or component_count), action_succeeds, all, any or not. A condition that cannot be read as written, or that names a component the game never registered, is refused before anything runs. Each iteration runs the `actions`, reads the condition, then reverses what the actions spawned or modified, so every iteration starts from the game as it was found; game_state in the reply counts what was reversed and what stays applied (a delete cannot be put back). A `variation_type` changes the numbers, strings and booleans inside `actions`; with no actions, or none it can change, the call is refused, because identical iterations are not independent trials. The reply's verdict is CONFIRMED, REJECTED, INCONCLUSIVE or NOT_EVALUATED, and statistics counts each iteration as held, violated, or not_evaluated: an action failed first, so the condition was never read, and the examples carry the game's own message. NOT_EVALUATED says nothing about the claim. success_rate and the interval are over the iterations that read the condition; the verdict counts every planned iteration, so held plus violated below iterations_planned keeps it from CONFIRMED. `timeout` bounds the whole run: when it passes the run stops between iterations (one already started finishes) and stopped_early says so, and other tools are answered between iterations. Without variation there is one iteration, so CONFIRMED means the condition held once when read, and the interval says how little that shows."
+    )]
+    pub async fn hypothesis(
+        &self,
+        Parameters(req): Parameters<HypothesisRequest>,
+    ) -> Result<CallToolResult, McpError> {
         debug!("Testing hypothesis action: {}", req.action);
 
         let arguments = match request_args(&req) {
@@ -870,8 +977,13 @@ impl BevyDebuggerTools {
     }
 
     /// Detect anomalies in game behavior
-    #[tool(description = "Look for anomalies in the game's entities. `action` picks the operation: `detect` reads every entity once and runs three detectors, `configure` sets the thresholds below, `status` lists what each detector reads. The detectors read only particular components, matched on the last segment of the type path: the linear vector of a component named Velocity (scored against that entity's own recent speeds, including the one just read), the current field of Health beside a boolean Alive, and the number of entities across `detect` calls. Speeds and the entity count are judged only after `min_samples` readings, kept between calls, so the first calls judge nothing. Those readings belong to one game process: after a game restart they are dropped, because the new game gives the same entity ids to other entities, and the reply says so in history_discarded; a game that cannot name its process leaves them unverified, with the reason in game_instance_unverified, and they are dropped once a game that names itself answers after one that answered without naming itself. `detect` returns a list of detectors saying, for each, how many entities it read and whether it could judge them, because an empty anomalies list from a detector that read nothing says nothing about the game. Severity, from 0 to 1, is how far past its threshold a speed or entity count is; a Health/Alive contradiction carries a fixed 0.9, a rule's rating and not a measurement. Like `observe`, the reply says which game frames it was read between. A detection is a lead to check, not a verdict.")]
-    pub async fn detect_anomaly(&self, Parameters(req): Parameters<AnomalyRequest>) -> Result<CallToolResult, McpError> {
+    #[tool(
+        description = "Look for anomalies in the game's entities. `action` picks the operation: `detect` reads every entity once and runs three detectors, `configure` sets the thresholds below, `status` lists what each detector reads. The detectors read only particular components, matched on the last segment of the type path: the linear vector of a component named Velocity (scored against that entity's own recent speeds, including the one just read), the current field of Health beside a boolean Alive, and the number of entities across `detect` calls. Speeds and the entity count are judged only after `min_samples` readings, kept between calls, so the first calls judge nothing. Those readings belong to one game process: after a game restart they are dropped, because the new game gives the same entity ids to other entities, and the reply says so in history_discarded; a game that cannot name its process leaves them unverified, with the reason in game_instance_unverified, and they are dropped once a game that names itself answers after one that answered without naming itself. `detect` returns a list of detectors saying, for each, how many entities it read and whether it could judge them, because an empty anomalies list from a detector that read nothing says nothing about the game. Severity, from 0 to 1, is how far past its threshold a speed or entity count is; a Health/Alive contradiction carries a fixed 0.9, a rule's rating and not a measurement. Like `observe`, the reply says which game frames it was read between. A detection is a lead to check, not a verdict."
+    )]
+    pub async fn detect_anomaly(
+        &self,
+        Parameters(req): Parameters<AnomalyRequest>,
+    ) -> Result<CallToolResult, McpError> {
         debug!("Running anomaly action: {}", req.action);
 
         let arguments = match request_args(&req) {
@@ -880,7 +992,11 @@ impl BevyDebuggerTools {
         };
 
         // Only `detect` reads the game; `configure` and `status` answer from this server's own state.
-        let before = if req.action == "detect" { Some(self.frame_now().await) } else { None };
+        let before = if req.action == "detect" {
+            Some(self.frame_now().await)
+        } else {
+            None
+        };
         match anomaly::handle(arguments, self.brp_client.clone()).await {
             Ok(mut result) => {
                 if let Some(before) = before {
@@ -896,8 +1012,13 @@ impl BevyDebuggerTools {
     }
 
     /// Report whether the game is answering and ready for commands
-    #[tool(description = "Report whether the game is answering and ready for commands: its frame, its instance (one value per game process, new after a restart), how many commands it registered, where captures come from, and the progress of a scene file the game is replaying (null when none was asked for; a scene file the game refused is reported with the reason under \"rejected\"). The reply also carries the URL this server talks to. Call this first.")]
-    pub async fn status(&self, Parameters(_req): Parameters<NoArgs>) -> Result<CallToolResult, McpError> {
+    #[tool(
+        description = "Report whether the game is answering and ready for commands: its frame, its instance (one value per game process, new after a restart), how many commands it registered, where captures come from, and the progress of a scene file the game is replaying (null when none was asked for; a scene file the game refused is reported with the reason under \"rejected\"). The reply also carries the URL this server talks to. Call this first."
+    )]
+    pub async fn status(
+        &self,
+        Parameters(_req): Parameters<NoArgs>,
+    ) -> Result<CallToolResult, McpError> {
         let url = self.game_url().await;
         match self.call_game(STATUS_METHOD, None).await {
             Ok(mut value) => {
@@ -911,8 +1032,13 @@ impl BevyDebuggerTools {
     }
 
     /// List the commands the game registered
-    #[tool(description = "List the commands the game registered, each with its parameters and a working example. Call this before `run`. The built-in bevy_fairy/time is listed last.")]
-    pub async fn commands(&self, Parameters(_req): Parameters<NoArgs>) -> Result<CallToolResult, McpError> {
+    #[tool(
+        description = "List the commands the game registered, each with its parameters and a working example. Call this before `run`. The built-in bevy_fairy/time is listed last."
+    )]
+    pub async fn commands(
+        &self,
+        Parameters(_req): Parameters<NoArgs>,
+    ) -> Result<CallToolResult, McpError> {
         match self.command_list().await {
             Ok(entries) => {
                 let blocks: Vec<String> = entries.iter().map(command_block).collect();
@@ -923,8 +1049,13 @@ impl BevyDebuggerTools {
     }
 
     /// Run one command the game registered
-    #[tool(description = "Run one command the game registered, by name, with its parameters. Waits up to 120 s for the game to be ready. An unknown name is refused with the closest known one. A command that changes the game is recorded, so `scene save` can write the run out as a replayable file; a command the game registered as read-only (bevy_fairy/ring and bevy_fairy/ui_text are) answers and is not recorded, because replaying it would change nothing.")]
-    pub async fn run(&self, Parameters(req): Parameters<RunRequest>) -> Result<CallToolResult, McpError> {
+    #[tool(
+        description = "Run one command the game registered, by name, with its parameters. Waits up to 120 s for the game to be ready. An unknown name is refused with the closest known one. A command that changes the game is recorded, so `scene save` can write the run out as a replayable file; a command the game registered as read-only (bevy_fairy/ring and bevy_fairy/ui_text are) answers and is not recorded, because replaying it would change nothing."
+    )]
+    pub async fn run(
+        &self,
+        Parameters(req): Parameters<RunRequest>,
+    ) -> Result<CallToolResult, McpError> {
         if let Err(text) = self.wait_until_ready().await {
             return tool_err(text);
         }
@@ -942,8 +1073,13 @@ impl BevyDebuggerTools {
     }
 
     /// Call any Bevy Remote Protocol method the game serves
-    #[tool(description = "Call any Bevy Remote Protocol method the game serves, for example world.query or registry.schema, and return its result. Use `run` for the game's own commands. Watching methods (names ending in +watch) are refused: they stream, and this returns one answer per call.")]
-    pub async fn brp(&self, Parameters(req): Parameters<BrpCallRequest>) -> Result<CallToolResult, McpError> {
+    #[tool(
+        description = "Call any Bevy Remote Protocol method the game serves, for example world.query or registry.schema, and return its result. Use `run` for the game's own commands. Watching methods (names ending in +watch) are refused: they stream, and this returns one answer per call."
+    )]
+    pub async fn brp(
+        &self,
+        Parameters(req): Parameters<BrpCallRequest>,
+    ) -> Result<CallToolResult, McpError> {
         // A watching method answers with a stream that never ends; reading it as one reply timed
         // out and was reported as "no game answering". Say what it is and what to call instead.
         if let Some(one_shot) = req.method.strip_suffix("+watch") {
@@ -961,8 +1097,13 @@ impl BevyDebuggerTools {
     }
 
     /// Capture the game to a PNG file
-    #[tool(description = "Capture the game to a PNG file on this machine and return its path, size, the source actually read (offscreen or window) and the game frames the request and the delivery happened on (compare with `status`'s frame to judge freshness). The default offscreen capture leaves out UI; source 'window' captures the game window with its UI included. Pass inline true to also get the image in the reply.")]
-    pub async fn screenshot(&self, Parameters(req): Parameters<ScreenshotRequest>) -> Result<CallToolResult, McpError> {
+    #[tool(
+        description = "Capture the game to a PNG file on this machine and return its path, size, the source actually read (offscreen or window) and the game frames the request and the delivery happened on (compare with `status`'s frame to judge freshness). The default offscreen capture leaves out UI; source 'window' captures the game window with its UI included. Pass inline true to also get the image in the reply."
+    )]
+    pub async fn screenshot(
+        &self,
+        Parameters(req): Parameters<ScreenshotRequest>,
+    ) -> Result<CallToolResult, McpError> {
         let mut params = serde_json::Map::new();
         if let Some(source) = req.source {
             params.insert("source".to_string(), Value::from(source));
@@ -987,16 +1128,28 @@ impl BevyDebuggerTools {
                  game's bevy_fairy dependency, or call without `rect`"
             ));
         }
-        let (width, height, png_base64, png) = (captured.width, captured.height, captured.png_base64.clone(), &captured.png);
-        let path = req.save_to.map(PathBuf::from).unwrap_or_else(default_capture_path);
+        let (width, height, png_base64, png) = (
+            captured.width,
+            captured.height,
+            captured.png_base64.clone(),
+            &captured.png,
+        );
+        let path = req
+            .save_to
+            .map(PathBuf::from)
+            .unwrap_or_else(default_capture_path);
         if let Err(e) = write_file_creating_dirs(&path, png) {
             return tool_err(format!("could not write {}: {e}", path.display()));
         }
         let absolute = std::path::absolute(&path).unwrap_or_else(|_| path.clone());
         let provenance = captured.provenance();
-        let picture = captured.picture.map_or_else(String::new, |[w, h]| format!(" of the {w}x{h} picture"));
-        let mut content =
-            vec![Content::text(format!("saved {} ({width}x{height}){picture}; {provenance}", absolute.display()))];
+        let picture = captured
+            .picture
+            .map_or_else(String::new, |[w, h]| format!(" of the {w}x{h} picture"));
+        let mut content = vec![Content::text(format!(
+            "saved {} ({width}x{height}){picture}; {provenance}",
+            absolute.display()
+        ))];
         if req.inline.unwrap_or(false) {
             content.push(Content::image(png_base64.to_string(), "image/png"));
         }
@@ -1004,15 +1157,24 @@ impl BevyDebuggerTools {
     }
 
     /// Capture a short sequence as a labelled contact sheet
-    #[tool(description = "Capture a short sequence of frames and return it as one contact sheet (a PNG, at most 2 rows x 4 columns), so a change over time can be seen: a sprite that stops moving, a flash, a transition. The first cell is a reference frame taken just before the sequence (labelled REF); the rest are `frames` captures at `fps` (default 4, 0.5-10), 1-7 frames. Every cell is labelled with the game frame the capture was delivered on (F<frame>) and the milliseconds since the reference was requested (+<ms>MS), both as reported, so two cells with the same F<frame> are the same game frame (the game is slower than `fps`). Each frame needs a round trip to the game, so the real spacing can exceed 1/fps: read the labels, not the request. Saves sheet.png and ref.png in a new directory (or full-resolution frame-<n>.png files too with full_frames true) and returns their paths. The default offscreen source leaves out UI; source 'window' includes it. Fails, saving nothing, when any capture fails or the frame size changes mid-sequence.")]
-    pub async fn burst(&self, Parameters(req): Parameters<BurstRequest>) -> Result<CallToolResult, McpError> {
+    #[tool(
+        description = "Capture a short sequence of frames and return it as one contact sheet (a PNG, at most 2 rows x 4 columns), so a change over time can be seen: a sprite that stops moving, a flash, a transition. The first cell is a reference frame taken just before the sequence (labelled REF); the rest are `frames` captures at `fps` (default 4, 0.5-10), 1-7 frames. Every cell is labelled with the game frame the capture was delivered on (F<frame>) and the milliseconds since the reference was requested (+<ms>MS), both as reported, so two cells with the same F<frame> are the same game frame (the game is slower than `fps`). Each frame needs a round trip to the game, so the real spacing can exceed 1/fps: read the labels, not the request. Saves sheet.png and ref.png in a new directory (or full-resolution frame-<n>.png files too with full_frames true) and returns their paths. The default offscreen source leaves out UI; source 'window' includes it. Fails, saving nothing, when any capture fails or the frame size changes mid-sequence."
+    )]
+    pub async fn burst(
+        &self,
+        Parameters(req): Parameters<BurstRequest>,
+    ) -> Result<CallToolResult, McpError> {
         let frames = req.frames.unwrap_or(4);
         if !(1..=7).contains(&frames) {
-            return tool_err(format!("`frames` must be between 1 and 7 (the reference takes the eighth cell), got {frames}. Example: {{\"frames\": 6, \"fps\": 4}}"));
+            return tool_err(format!(
+                "`frames` must be between 1 and 7 (the reference takes the eighth cell), got {frames}. Example: {{\"frames\": 6, \"fps\": 4}}"
+            ));
         }
         let fps = req.fps.unwrap_or(4.0);
         if !(0.5..=10.0).contains(&fps) {
-            return tool_err(format!("`fps` must be between 0.5 and 10, got {fps}. Example: {{\"frames\": 6, \"fps\": 4}}"));
+            return tool_err(format!(
+                "`fps` must be between 0.5 and 10, got {fps}. Example: {{\"frames\": 6, \"fps\": 4}}"
+            ));
         }
         let mut params = serde_json::Map::new();
         if let Some(source) = &req.source {
@@ -1027,18 +1189,29 @@ impl BevyDebuggerTools {
             }
             match self.capture_once(params.clone()).await {
                 Ok(captured) => shots.push((captured, started.elapsed().as_millis())),
-                Err(text) => return tool_err(format!("burst stopped at capture {n} of {frames}, nothing saved: {text}")),
+                Err(text) => {
+                    return tool_err(format!(
+                        "burst stopped at capture {n} of {frames}, nothing saved: {text}"
+                    ));
+                }
             }
         }
 
         let mut cells = Vec::with_capacity(shots.len());
         for (n, (shot, at_ms)) in shots.iter().enumerate() {
-            let image = match image::load_from_memory_with_format(&shot.png, image::ImageFormat::Png) {
-                Ok(image) => image.to_rgba8(),
-                Err(e) => return tool_err(format!("capture {n} was not a readable PNG: {e}")),
+            let image =
+                match image::load_from_memory_with_format(&shot.png, image::ImageFormat::Png) {
+                    Ok(image) => image.to_rgba8(),
+                    Err(e) => return tool_err(format!("capture {n} was not a readable PNG: {e}")),
+                };
+            let frame = shot
+                .frame_captured
+                .map_or_else(|| "-".to_string(), |f| f.to_string());
+            let label = if n == 0 {
+                format!("REF F{frame}")
+            } else {
+                format!("F{frame} +{at_ms}MS")
             };
-            let frame = shot.frame_captured.map_or_else(|| "-".to_string(), |f| f.to_string());
-            let label = if n == 0 { format!("REF F{frame}") } else { format!("F{frame} +{at_ms}MS") };
             cells.push(crate::server::contact_sheet::Cell { image, label });
         }
         let sheet = match crate::server::contact_sheet::compose(&cells) {
@@ -1046,13 +1219,24 @@ impl BevyDebuggerTools {
             Err(text) => return tool_err(format!("{text}; nothing saved")),
         };
         let mut sheet_png = Vec::new();
-        if let Err(e) = sheet.write_to(&mut std::io::Cursor::new(&mut sheet_png), image::ImageFormat::Png) {
+        if let Err(e) = sheet.write_to(
+            &mut std::io::Cursor::new(&mut sheet_png),
+            image::ImageFormat::Png,
+        ) {
             return tool_err(format!("could not encode the contact sheet: {e}"));
         }
 
-        let dir = req.save_dir.map(PathBuf::from).unwrap_or_else(default_burst_dir);
-        let mut files: Vec<(PathBuf, &[u8])> = vec![(dir.join("sheet.png"), &sheet_png), (dir.join("ref.png"), &shots[0].0.png)];
-        let frame_names: Vec<PathBuf> = (1..shots.len()).map(|n| dir.join(format!("frame-{n}.png"))).collect();
+        let dir = req
+            .save_dir
+            .map(PathBuf::from)
+            .unwrap_or_else(default_burst_dir);
+        let mut files: Vec<(PathBuf, &[u8])> = vec![
+            (dir.join("sheet.png"), &sheet_png),
+            (dir.join("ref.png"), &shots[0].0.png),
+        ];
+        let frame_names: Vec<PathBuf> = (1..shots.len())
+            .map(|n| dir.join(format!("frame-{n}.png")))
+            .collect();
         if req.full_frames.unwrap_or(false) {
             for (name, (shot, _)) in frame_names.iter().zip(shots.iter().skip(1)) {
                 files.push((name.clone(), &shot.png));
@@ -1073,34 +1257,64 @@ impl BevyDebuggerTools {
             absolute(&files[1].0).display()
         )];
         if req.full_frames.unwrap_or(false) {
-            lines.push(format!("full-resolution frames: {}", frame_names.iter().map(|p| absolute(p).display().to_string()).collect::<Vec<_>>().join(", ")));
+            lines.push(format!(
+                "full-resolution frames: {}",
+                frame_names
+                    .iter()
+                    .map(|p| absolute(p).display().to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ));
         }
         for (n, (shot, at_ms)) in shots.iter().enumerate() {
-            let name = if n == 0 { "ref".to_string() } else { format!("frame {n}") };
+            let name = if n == 0 {
+                "ref".to_string()
+            } else {
+                format!("frame {n}")
+            };
             lines.push(format!("{name}: +{at_ms} ms, {}", shot.provenance()));
         }
-        let distinct: std::collections::BTreeSet<u64> = shots.iter().filter_map(|(s, _)| s.frame_captured).collect();
-        lines.push(format!("{} distinct game frames across {} captures", distinct.len(), shots.len()));
+        let distinct: std::collections::BTreeSet<u64> =
+            shots.iter().filter_map(|(s, _)| s.frame_captured).collect();
+        lines.push(format!(
+            "{} distinct game frames across {} captures",
+            distinct.len(),
+            shots.len()
+        ));
         let mut content = vec![Content::text(lines.join("\n"))];
         if req.inline.unwrap_or(false) {
-            content.push(Content::image(base64::engine::general_purpose::STANDARD.encode(&sheet_png), "image/png"));
+            content.push(Content::image(
+                base64::engine::general_purpose::STANDARD.encode(&sheet_png),
+                "image/png",
+            ));
         }
         Ok(CallToolResult::success(content))
     }
 
     /// Save, show or clear the recorded commands
-    #[tool(description = "Work with the commands recorded in this game session. save writes them to a replayable scene file on this machine (path required); show returns them; clear forgets them.")]
-    pub async fn scene(&self, Parameters(req): Parameters<SceneRequest>) -> Result<CallToolResult, McpError> {
+    #[tool(
+        description = "Work with the commands recorded in this game session. save writes them to a replayable scene file on this machine (path required); show returns them; clear forgets them."
+    )]
+    pub async fn scene(
+        &self,
+        Parameters(req): Parameters<SceneRequest>,
+    ) -> Result<CallToolResult, McpError> {
         match req.action {
             SceneAction::Save => {
                 let Some(path) = req.path else {
                     return tool_err("scene save needs a path");
                 };
-                let scene = match self.call_game(SCENE_METHOD, Some(serde_json::json!({"action": "get"}))).await {
+                let scene = match self
+                    .call_game(SCENE_METHOD, Some(serde_json::json!({"action": "get"})))
+                    .await
+                {
                     Ok(value) => value,
                     Err(text) => return tool_err(text),
                 };
-                let steps = scene.get("steps").and_then(Value::as_array).map_or(0, Vec::len);
+                let steps = scene
+                    .get("steps")
+                    .and_then(Value::as_array)
+                    .map_or(0, Vec::len);
                 let text = match serde_json::to_string_pretty(&scene) {
                     Ok(text) => text,
                     Err(e) => return tool_err(format!("could not format the scene: {e}")),
@@ -1113,14 +1327,23 @@ impl BevyDebuggerTools {
                 tool_ok(format!("saved {} ({steps} steps)", absolute.display()))
             }
             SceneAction::Show => {
-                let scene = match self.call_game(SCENE_METHOD, Some(serde_json::json!({"action": "get"}))).await {
+                let scene = match self
+                    .call_game(SCENE_METHOD, Some(serde_json::json!({"action": "get"})))
+                    .await
+                {
                     Ok(value) => value,
                     Err(text) => return tool_err(text),
                 };
-                let steps = scene.get("steps").cloned().unwrap_or_else(|| Value::Array(Vec::new()));
+                let steps = scene
+                    .get("steps")
+                    .cloned()
+                    .unwrap_or_else(|| Value::Array(Vec::new()));
                 tool_ok(steps.to_string())
             }
-            SceneAction::Clear => match self.call_game(SCENE_METHOD, Some(serde_json::json!({"action": "clear"}))).await {
+            SceneAction::Clear => match self
+                .call_game(SCENE_METHOD, Some(serde_json::json!({"action": "clear"})))
+                .await
+            {
                 Ok(value) => tool_ok(value.to_string()),
                 Err(text) => tool_err(text),
             },
@@ -1128,8 +1351,13 @@ impl BevyDebuggerTools {
     }
 
     /// Sample a BRP method over time
-    #[tool(description = "Sample one BRP method repeatedly and return the series, each sample stamped with the game frames it was read between (\"frame\" to \"frame_until\", usually one apart or equal) and the milliseconds since the first sample. Use it for anything that happens over time: a value that stops changing, a position's speed, a counter that drifts. The reply says whether the value changed, how many distinct values were seen, the frame of the first change, and \"constant_since_frame\" (the frame from which the last value never changed, null when it changed at the last sample). A result with several values changes as a whole when any one of them does, so when the sampled value holds two or more values (a component's fields, the rows of a query) \"fields\" gives each of them those same numbers beside a pointer you can pass back as `pointer`. The values that moved between values they held and then stopped are listed first, then the other values that changed, then the ones that never moved, at most 40, with \"fields_omitted\" counting the rest. \"absent_samples\" counts the samples that lacked a value: that counts as a change, but a value that only appeared or skipped a sample did not stop, and a value gone from the last sample is never reported as constant. An array position is a position, not an identity: a despawn shifts the rows after it. Samples are polled over HTTP at `interval_ms` (20-5000), so changes between samples are not seen; 2-100 samples, 30 s in total at most. Pass `pointer` (JSON pointer into each result) to keep samples small; a pointer that matches nothing is an error. Streaming `+watch` methods are refused.")]
-    pub async fn watch(&self, Parameters(req): Parameters<WatchRequest>) -> Result<CallToolResult, McpError> {
+    #[tool(
+        description = "Sample one BRP method repeatedly and return the series, each sample stamped with the game frames it was read between (\"frame\" to \"frame_until\", usually one apart or equal) and the milliseconds since the first sample. Use it for anything that happens over time: a value that stops changing, a position's speed, a counter that drifts. The reply says whether the value changed, how many distinct values were seen, the frame of the first change, and \"constant_since_frame\" (the frame from which the last value never changed, null when it changed at the last sample). A result with several values changes as a whole when any one of them does, so when the sampled value holds two or more values (a component's fields, the rows of a query) \"fields\" gives each of them those same numbers beside a pointer you can pass back as `pointer`. The values that moved between values they held and then stopped are listed first, then the other values that changed, then the ones that never moved, at most 40, with \"fields_omitted\" counting the rest. \"absent_samples\" counts the samples that lacked a value: that counts as a change, but a value that only appeared or skipped a sample did not stop, and a value gone from the last sample is never reported as constant. An array position is a position, not an identity: a despawn shifts the rows after it. Samples are polled over HTTP at `interval_ms` (20-5000), so changes between samples are not seen; 2-100 samples, 30 s in total at most. Pass `pointer` (JSON pointer into each result) to keep samples small; a pointer that matches nothing is an error. Streaming `+watch` methods are refused."
+    )]
+    pub async fn watch(
+        &self,
+        Parameters(req): Parameters<WatchRequest>,
+    ) -> Result<CallToolResult, McpError> {
         if let Some(one_shot) = req.method.strip_suffix("+watch") {
             return tool_err(format!(
                 "`{}` is a streaming method; `watch` polls a one-shot method. Call \
@@ -1139,11 +1367,15 @@ impl BevyDebuggerTools {
         }
         let samples = req.samples.unwrap_or(10);
         if !(2..=100).contains(&samples) {
-            return tool_err(format!("`samples` must be between 2 and 100, got {samples}. Example: {{\"method\": \"world.query\", \"samples\": 10}}"));
+            return tool_err(format!(
+                "`samples` must be between 2 and 100, got {samples}. Example: {{\"method\": \"world.query\", \"samples\": 10}}"
+            ));
         }
         let interval_ms = req.interval_ms.unwrap_or(100);
         if !(20..=5000).contains(&interval_ms) {
-            return tool_err(format!("`interval_ms` must be between 20 and 5000, got {interval_ms}."));
+            return tool_err(format!(
+                "`interval_ms` must be between 20 and 5000, got {interval_ms}."
+            ));
         }
         if u64::from(samples) * interval_ms > WATCH_MAX_TOTAL_MS {
             return tool_err(format!(
@@ -1161,7 +1393,10 @@ impl BevyDebuggerTools {
             if n > 0 {
                 tokio::time::sleep(Duration::from_millis(interval_ms)).await;
             }
-            let (frame, frame_until, result) = match self.sample_with_frame(&req.method, req.params.clone()).await {
+            let (frame, frame_until, result) = match self
+                .sample_with_frame(&req.method, req.params.clone())
+                .await
+            {
                 Ok(pair) => pair,
                 Err(text) if series.is_empty() => return tool_err(text),
                 Err(text) => {
@@ -1181,7 +1416,10 @@ impl BevyDebuggerTools {
                         ));
                     }
                     None => {
-                        stopped = Some(format!("pointer `{pointer}` stopped matching at sample {}", n + 1));
+                        stopped = Some(format!(
+                            "pointer `{pointer}` stopped matching at sample {}",
+                            n + 1
+                        ));
                         break;
                     }
                 },
@@ -1228,7 +1466,10 @@ impl BevyDebuggerTools {
 
     /// Ask the game to quit
     #[tool(description = "Ask the game to quit cleanly.")]
-    pub async fn quit(&self, Parameters(_req): Parameters<NoArgs>) -> Result<CallToolResult, McpError> {
+    pub async fn quit(
+        &self,
+        Parameters(_req): Parameters<NoArgs>,
+    ) -> Result<CallToolResult, McpError> {
         match self.call_game(QUIT_METHOD, None).await {
             Ok(value) => tool_ok(value.to_string()),
             Err(text) => tool_err(text),

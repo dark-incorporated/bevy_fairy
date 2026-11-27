@@ -40,17 +40,17 @@
 //! `MouseButton::Other(u16)` is reachable as `{"Other": 3}`, since that is how serde spells a
 //! newtype variant.
 
+use bevy::input::ButtonState;
 use bevy::input::keyboard::{Key, KeyCode, KeyboardInput, NativeKey, NativeKeyCode};
 use bevy::input::mouse::{MouseButton, MouseButtonInput, MouseScrollUnit, MouseWheel};
 use bevy::input::touch::TouchPhase;
-use bevy::input::ButtonState;
 use bevy::prelude::*;
-use bevy::remote::{error_codes, BrpError, BrpResult};
+use bevy::remote::{BrpError, BrpResult, error_codes};
 use bevy::window::PrimaryWindow;
 
 use super::pointer::PointerRoute;
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// Parameters for the `bevy_fairy/input` BRP method.
 ///
@@ -128,7 +128,11 @@ pub enum InputAction {
 }
 
 fn invalid_params(message: String) -> BrpError {
-    BrpError { code: error_codes::INVALID_PARAMS, message, data: None }
+    BrpError {
+        code: error_codes::INVALID_PARAMS,
+        message,
+        data: None,
+    }
 }
 
 /// The fields each kind of input reads. `Cursor` reads no `action`, but ignores one by design (a
@@ -148,12 +152,18 @@ fn fields_read_by(kind: &InputKind) -> &'static [&'static str] {
 /// sent with its default value cannot be told apart once parsed.
 fn refuse_unread_fields(kind: &InputKind, params: &Value) -> Result<(), BrpError> {
     let read = fields_read_by(kind);
-    let Some(field) = params.as_object().and_then(|o| o.keys().find(|k| !read.contains(&k.as_str()))) else {
+    let Some(field) = params
+        .as_object()
+        .and_then(|o| o.keys().find(|k| !read.contains(&k.as_str())))
+    else {
         return Ok(());
     };
     let mut message = format!(
         "`{field}` is not read by `kind: {kind:?}`, so it would change nothing; that kind reads {}",
-        read.iter().map(|f| format!("`{f}`")).collect::<Vec<_>>().join(", ")
+        read.iter()
+            .map(|f| format!("`{f}`"))
+            .collect::<Vec<_>>()
+            .join(", ")
     );
     if matches!(kind, InputKind::Mouse) && (field == "x" || field == "y") {
         message.push_str(
@@ -170,7 +180,12 @@ fn refuse_unread_fields(kind: &InputKind, params: &Value) -> Result<(), BrpError
 enum Injected {
     /// A key, named by its physical [`KeyCode`] and carrying the logical half Bevy spells for that
     /// same name — see [`logical_for`].
-    Key { key_code: KeyCode, logical: Key, action: InputAction, window: Entity },
+    Key {
+        key_code: KeyCode,
+        logical: Key,
+        action: InputAction,
+        window: Entity,
+    },
     /// One typed character, **already built as the message it will be written as**.
     ///
     /// Whole rather than a `char`, because `Key::Character` and [`KeyboardInput::text`] both hold a
@@ -178,7 +193,12 @@ enum Injected {
     /// deserializer builds it in [`typed`] and nothing here ever names the type.
     Typed(KeyboardInput),
     Mouse(MouseButton, InputAction, Entity),
-    Scroll { unit: MouseScrollUnit, x: f32, y: f32, window: Entity },
+    Scroll {
+        unit: MouseScrollUnit,
+        x: f32,
+        y: f32,
+        window: Entity,
+    },
     Cursor(Option<Vec2>),
 }
 
@@ -353,7 +373,8 @@ impl PendingInput {
 
     /// Queue a mouse-button action, applied on the next `PreUpdate`.
     pub fn queue_mouse(&mut self, button: MouseButton, action: InputAction) {
-        self.queue.push(Injected::Mouse(button, action, Entity::PLACEHOLDER));
+        self.queue
+            .push(Injected::Mouse(button, action, Entity::PLACEHOLDER));
     }
 
     /// Queue a cursor move — logical window pixels, or `None` to hand the pointer back.
@@ -491,7 +512,12 @@ pub fn apply_pending_input(
         }
 
         match cmd {
-            Injected::Key { key_code, logical, action, window } => {
+            Injected::Key {
+                key_code,
+                logical,
+                action,
+                window,
+            } => {
                 keys_touched.push(key_code);
                 let message = |state| KeyboardInput {
                     key_code,
@@ -514,7 +540,9 @@ pub fn apply_pending_input(
                     }
                     InputAction::Tap => {
                         keyboard.write(message(ButtonState::Pressed));
-                        pending.release_next_keys.push(message(ButtonState::Released));
+                        pending
+                            .release_next_keys
+                            .push(message(ButtonState::Released));
                     }
                 }
             }
@@ -530,7 +558,11 @@ pub fn apply_pending_input(
                 buttons_touched.push(button);
                 let window = route.window_or_primary(window);
                 let at = cursor.0.unwrap_or(Vec2::ZERO);
-                let message = |state| MouseButtonInput { button, state, window };
+                let message = |state| MouseButtonInput {
+                    button,
+                    state,
+                    window,
+                };
                 match action {
                     InputAction::Press => {
                         route.button(&message(ButtonState::Pressed), at);
@@ -543,7 +575,9 @@ pub fn apply_pending_input(
                     InputAction::Tap => {
                         route.button(&message(ButtonState::Pressed), at);
                         mouse.write(message(ButtonState::Pressed));
-                        pending.release_next_buttons.push(message(ButtonState::Released));
+                        pending
+                            .release_next_buttons
+                            .push(message(ButtonState::Released));
                     }
                 }
             }
@@ -591,7 +625,9 @@ pub fn handle_input(
         Some(p) => {
             // A positional array parses as a struct, and `deny_unknown_fields` does not police it.
             if !p.is_object() {
-                return Err(invalid_params(format!("input params must be a JSON object, got {p}")));
+                return Err(invalid_params(format!(
+                    "input params must be a JSON object, got {p}"
+                )));
             }
             let cmd: InputCommand = serde_json::from_value(p.clone())
                 .map_err(|e| invalid_params(format!("invalid input params: {e}")))?;
@@ -661,13 +697,11 @@ pub fn handle_input(
                         invalid_params(format!("no logical key exists for the character {ch:?}"))
                     })?;
                 }
-                (None, None) => {
-                    return Err(invalid_params(
-                        "keyboard input needs `key` (a key on the keyboard) or `text` (what should \
+                (None, None) => return Err(invalid_params(
+                    "keyboard input needs `key` (a key on the keyboard) or `text` (what should \
                          arrive)"
-                            .to_string(),
-                    ))
-                }
+                        .to_string(),
+                )),
                 // Refused above; the arm exists so the match is total without a catch-all that could
                 // swallow a future case.
                 (Some(_), Some(_)) => unreachable!("both-supplied is refused above"),
@@ -682,7 +716,10 @@ pub fn handle_input(
             // A press lands where picking last saw the pointer, and picking starts at (0, 0). Refusing
             // would break a host driven by the real cursor, so the reply says it instead.
             let aimed = injected_cursor.is_some_and(|c| c.0.is_some())
-                || pending.queue.iter().any(|c| matches!(c, Injected::Cursor(Some(_))));
+                || pending
+                    .queue
+                    .iter()
+                    .any(|c| matches!(c, Injected::Cursor(Some(_))));
             if !aimed {
                 notes.push(
                     "no injected cursor position: the click lands where the pointer last was \
@@ -692,14 +729,19 @@ pub fn handle_input(
             // `bevy_picking` maps Left, Right and Middle and skips the rest (`mouse_pick_events`), on
             // the window route and the image route alike: the press is in `ButtonInput` and the
             // message stream, and nothing built on picking can see it (B-131).
-            if !matches!(button, MouseButton::Left | MouseButton::Right | MouseButton::Middle) {
+            if !matches!(
+                button,
+                MouseButton::Left | MouseButton::Right | MouseButton::Middle
+            ) {
                 notes.push(
                     "this button reaches ButtonInput<MouseButton> and the MouseButtonInput stream \
                      only: bevy_picking has no Back, Forward or Other pointer button, so bevy_ui \
                      buttons and pointer observers never see it",
                 );
             }
-            pending.queue.push(Injected::Mouse(button, cmd.action, addressed));
+            pending
+                .queue
+                .push(Injected::Mouse(button, cmd.action, addressed));
         }
         InputKind::Scroll => {
             // This was a stub that returned success and wrote nothing — the worst of both, because a
@@ -719,7 +761,7 @@ pub fn handle_input(
                 Some(other) => {
                     return Err(invalid_params(format!(
                         "unknown scroll unit `{other}`; expected \"Line\" or \"Pixel\""
-                    )))
+                    )));
                 }
             };
             if cmd.x.is_none() && cmd.y.is_none() {
@@ -735,7 +777,12 @@ pub fn handle_input(
                     "scroll amounts must be finite, got x={x}, y={y}"
                 )));
             }
-            pending.queue.push(Injected::Scroll { unit, x, y, window: *window });
+            pending.queue.push(Injected::Scroll {
+                unit,
+                x,
+                y,
+                window: *window,
+            });
         }
         InputKind::Cursor => {
             if cmd.clear {

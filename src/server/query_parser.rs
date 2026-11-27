@@ -15,7 +15,10 @@ pub struct ParsedQuery {
 
 impl From<BrpRequest> for ParsedQuery {
     fn from(request: BrpRequest) -> Self {
-        Self { request, limit: None }
+        Self {
+            request,
+            limit: None,
+        }
     }
 }
 
@@ -85,7 +88,12 @@ fn split_component_list(list: &str) -> Vec<String> {
         }
     }
     names.push(&list[start..]);
-    names.into_iter().map(str::trim).filter(|name| !name.is_empty()).map(str::to_string).collect()
+    names
+        .into_iter()
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+        .map(str::to_string)
+        .collect()
 }
 
 /// Build a `world.get_components` request.
@@ -112,7 +120,7 @@ pub(crate) fn make_list_components_request() -> BrpRequest {
 
 impl RegexQueryParser {
     /// Create a new regex-based query parser
-    /// 
+    ///
     /// # Errors
     /// Returns error if any regex pattern fails to compile
     pub fn new() -> Result<Self> {
@@ -124,49 +132,52 @@ impl RegexQueryParser {
                 builder: |_| Ok(make_query_request(None).into()),
                 description: "list all entities - List all entities in the game",
             },
-
             // Show specific entity
             QueryPattern {
                 pattern: Regex::new(r"^(?i)show\s+entity\s+(\d+)$")
                     .map_err(|e| Error::Validation(format!("Invalid regex pattern: {}", e)))?,
                 builder: |caps| {
-                    let entity_id = caps[1].parse::<u64>()
+                    let entity_id = caps[1]
+                        .parse::<u64>()
                         .map_err(|_| Error::Brp("Invalid entity ID".to_string()))?;
                     Ok(make_get_request(entity_id, None).into())
                 },
                 description: "show entity X - Show details for entity with ID X",
             },
-
             // Find entities with component
             QueryPattern {
-                pattern: Regex::new(&format!(r"^(?i)find\s+entities\s+with\s+component\s+({PATH})$"))
-                    .map_err(|e| Error::Validation(format!("Invalid regex pattern: {}", e)))?,
+                pattern: Regex::new(&format!(
+                    r"^(?i)find\s+entities\s+with\s+component\s+({PATH})$"
+                ))
+                .map_err(|e| Error::Validation(format!("Invalid regex pattern: {}", e)))?,
                 builder: |caps| {
                     let component_type = caps[1].to_string();
                     Ok(make_query_request(Some(QueryFilter {
                         with: Some(vec![component_type]),
                         without: None,
                         where_clause: None,
-                    })).into())
+                    }))
+                    .into())
                 },
                 description: "find entities with component Y - Find all entities that have component Y",
             },
-
             // Find entities without component
             QueryPattern {
-                pattern: Regex::new(&format!(r"^(?i)find\s+entities\s+without\s+component\s+({PATH})$"))
-                    .map_err(|e| Error::Validation(format!("Invalid regex pattern: {}", e)))?,
+                pattern: Regex::new(&format!(
+                    r"^(?i)find\s+entities\s+without\s+component\s+({PATH})$"
+                ))
+                .map_err(|e| Error::Validation(format!("Invalid regex pattern: {}", e)))?,
                 builder: |caps| {
                     let component_type = caps[1].to_string();
                     Ok(make_query_request(Some(QueryFilter {
                         with: None,
                         without: Some(vec![component_type]),
                         where_clause: None,
-                    })).into())
+                    }))
+                    .into())
                 },
                 description: "find entities without component Y - Find all entities that don't have component Y",
             },
-
             // List component types
             QueryPattern {
                 pattern: Regex::new(r"^(?i)list\s+components?$")
@@ -174,11 +185,12 @@ impl RegexQueryParser {
                 builder: |_| Ok(make_list_components_request().into()),
                 description: "list components - List all available component types",
             },
-
             // Find entities with multiple components
             QueryPattern {
-                pattern: Regex::new(&format!(r"^(?i)find\s+entities\s+with\s+(?:components?\s+)?({PATH_LIST})$"))
-                    .map_err(|e| Error::Validation(format!("Invalid regex pattern: {}", e)))?,
+                pattern: Regex::new(&format!(
+                    r"^(?i)find\s+entities\s+with\s+(?:components?\s+)?({PATH_LIST})$"
+                ))
+                .map_err(|e| Error::Validation(format!("Invalid regex pattern: {}", e)))?,
                 builder: |caps| {
                     let components = split_component_list(&caps[1]);
 
@@ -190,37 +202,52 @@ impl RegexQueryParser {
                         with: Some(components),
                         without: None,
                         where_clause: None,
-                    })).into())
+                    }))
+                    .into())
                 },
                 description: "find entities with A, B, C - Find entities that have all specified components",
             },
-
             // Get entity with specific components only
             QueryPattern {
-                pattern: Regex::new(&format!(r"^(?i)show\s+entity\s+(\d+)\s+components?\s+({PATH_LIST})$"))
-                    .map_err(|e| Error::Validation(format!("Invalid regex pattern: {}", e)))?,
+                pattern: Regex::new(&format!(
+                    r"^(?i)show\s+entity\s+(\d+)\s+components?\s+({PATH_LIST})$"
+                ))
+                .map_err(|e| Error::Validation(format!("Invalid regex pattern: {}", e)))?,
                 builder: |caps| {
-                    let entity_id = caps[1].parse::<u64>()
+                    let entity_id = caps[1]
+                        .parse::<u64>()
                         .map_err(|_| Error::Brp("Invalid entity ID".to_string()))?;
                     let components = split_component_list(&caps[2]);
 
                     Ok(make_get_request(
                         entity_id,
-                        if components.is_empty() { None } else { Some(components) },
-                    ).into())
+                        if components.is_empty() {
+                            None
+                        } else {
+                            Some(components)
+                        },
+                    )
+                    .into())
                 },
                 description: "show entity X components A, B - Show specific components of entity X",
             },
-
             // Query with limit
             QueryPattern {
-                pattern: Regex::new(&format!(r"^(?i)find\s+(\d+)\s+entities\s+with\s+component\s+({PATH})$"))
-                    .map_err(|e| Error::Validation(format!("Invalid regex pattern: {}", e)))?,
+                pattern: Regex::new(&format!(
+                    r"^(?i)find\s+(\d+)\s+entities\s+with\s+component\s+({PATH})$"
+                ))
+                .map_err(|e| Error::Validation(format!("Invalid regex pattern: {}", e)))?,
                 builder: |caps| {
-                    let limit = caps[1].parse::<usize>()
+                    let limit = caps[1]
+                        .parse::<usize>()
                         .ok()
                         .filter(|limit| *limit > 0)
-                        .ok_or_else(|| Error::Brp(format!("Invalid limit '{}': ask for at least 1 entity", &caps[1])))?;
+                        .ok_or_else(|| {
+                            Error::Brp(format!(
+                                "Invalid limit '{}': ask for at least 1 entity",
+                                &caps[1]
+                            ))
+                        })?;
                     let component_type = caps[2].to_string();
                     Ok(ParsedQuery {
                         request: make_query_request(Some(QueryFilter {
@@ -286,11 +313,17 @@ mod tests {
 
         // Test list all entities
         let result = parser.parse("list all entities").unwrap().request;
-        assert_eq!(result.method, crate::server::brp::builtin_methods::BRP_QUERY_METHOD);
+        assert_eq!(
+            result.method,
+            crate::server::brp::builtin_methods::BRP_QUERY_METHOD
+        );
 
         // Test show entity
         let result = parser.parse("show entity 123").unwrap().request;
-        assert_eq!(result.method, crate::server::brp::builtin_methods::BRP_GET_COMPONENTS_METHOD);
+        assert_eq!(
+            result.method,
+            crate::server::brp::builtin_methods::BRP_GET_COMPONENTS_METHOD
+        );
         let entity = result
             .params
             .as_ref()
@@ -304,7 +337,10 @@ mod tests {
             .parse("find entities with component Transform")
             .unwrap()
             .request;
-        assert_eq!(result.method, crate::server::brp::builtin_methods::BRP_QUERY_METHOD);
+        assert_eq!(
+            result.method,
+            crate::server::brp::builtin_methods::BRP_QUERY_METHOD
+        );
         let with = result
             .params
             .as_ref()
@@ -322,8 +358,14 @@ mod tests {
         let result1 = parser.parse("LIST ALL ENTITIES").unwrap().request;
         let result2 = parser.parse("list all entities").unwrap().request;
 
-        assert_eq!(result1.method, crate::server::brp::builtin_methods::BRP_QUERY_METHOD);
-        assert_eq!(result2.method, crate::server::brp::builtin_methods::BRP_QUERY_METHOD);
+        assert_eq!(
+            result1.method,
+            crate::server::brp::builtin_methods::BRP_QUERY_METHOD
+        );
+        assert_eq!(
+            result2.method,
+            crate::server::brp::builtin_methods::BRP_QUERY_METHOD
+        );
     }
 
     #[test]
@@ -333,7 +375,11 @@ mod tests {
         assert!(parser.parse("").is_err());
         assert!(parser.parse("invalid query").is_err());
         assert!(parser.parse("show entity abc").is_err()); // Invalid entity ID
-        assert!(parser.parse("find 0 entities with component Transform").is_err());
+        assert!(
+            parser
+                .parse("find 0 entities with component Transform")
+                .is_err()
+        );
     }
 
     #[test]
@@ -344,7 +390,10 @@ mod tests {
             .parse("find entities with Transform, Velocity, Health")
             .unwrap()
             .request;
-        assert_eq!(result.method, crate::server::brp::builtin_methods::BRP_QUERY_METHOD);
+        assert_eq!(
+            result.method,
+            crate::server::brp::builtin_methods::BRP_QUERY_METHOD
+        );
         let with = result
             .params
             .as_ref()
@@ -365,11 +414,19 @@ mod tests {
     /// The component names a parsed query puts in the filter's `with` and `without` lists.
     fn filter_names(query: &str) -> Vec<String> {
         let parser = RegexQueryParser::new().unwrap();
-        let request = parser.parse(query).unwrap_or_else(|e| panic!("{query}: {e}")).request;
+        let request = parser
+            .parse(query)
+            .unwrap_or_else(|e| panic!("{query}: {e}"))
+            .request;
         let params = request.params.expect("a filter query carries params");
         ["with", "without"]
             .iter()
-            .flat_map(|kind| params["filter"][*kind].as_array().cloned().unwrap_or_default())
+            .flat_map(|kind| {
+                params["filter"][*kind]
+                    .as_array()
+                    .cloned()
+                    .unwrap_or_default()
+            })
             .map(|name| name.as_str().expect("names are strings").to_string())
             .collect()
     }
@@ -380,7 +437,10 @@ mod tests {
     #[test]
     fn component_paths_with_digits_parse() {
         for (query, expected) in [
-            ("find entities with component bevy_mesh::components::Mesh3d", "bevy_mesh::components::Mesh3d"),
+            (
+                "find entities with component bevy_mesh::components::Mesh3d",
+                "bevy_mesh::components::Mesh3d",
+            ),
             (
                 "find 2 entities with component avian3d::dynamics::rigid_body::LinearVelocity",
                 "avian3d::dynamics::rigid_body::LinearVelocity",
@@ -399,7 +459,10 @@ mod tests {
             .parse("show entity 7 components bevy_mesh::components::Mesh3d")
             .expect("a digit in a path is allowed after `show entity N components`")
             .request;
-        assert_eq!(shown.params.unwrap()["components"], serde_json::json!(["bevy_mesh::components::Mesh3d"]));
+        assert_eq!(
+            shown.params.unwrap()["components"],
+            serde_json::json!(["bevy_mesh::components::Mesh3d"])
+        );
     }
 
     /// A registered path can end in generic arguments, `Time<bevy_time::real::Real>` or the unit
@@ -408,19 +471,38 @@ mod tests {
     #[test]
     fn generic_component_paths_parse_and_only_top_level_commas_separate() {
         let real = "bevy_time::time::Time<bevy_time::real::Real>";
-        assert_eq!(filter_names(&format!("find entities with component {real}")), [real]);
-        assert_eq!(filter_names("find entities with component bevy_time::time::Time<()>"), ["bevy_time::time::Time<()>"]);
+        assert_eq!(
+            filter_names(&format!("find entities with component {real}")),
+            [real]
+        );
+        assert_eq!(
+            filter_names("find entities with component bevy_time::time::Time<()>"),
+            ["bevy_time::time::Time<()>"]
+        );
 
         let two = "some::Pair<a::A, b::B>";
-        assert_eq!(filter_names(&format!("find entities with component {two}")), [two]);
-        // Every shape that names one component takes a generic path with a space in it.
-        assert_eq!(filter_names(&format!("find entities without component {two}")), [two]);
-        let parser = RegexQueryParser::new().unwrap();
-        let limited = parser.parse(&format!("find 3 entities with component {two}")).expect("a spaced generic after `find N`");
-        assert_eq!(limited.limit, Some(3));
-        assert_eq!(limited.request.params.unwrap()["filter"]["with"], serde_json::json!([two]));
         assert_eq!(
-            filter_names(&format!("find entities with {two}, bevy_mesh::components::Mesh3d, {real}")),
+            filter_names(&format!("find entities with component {two}")),
+            [two]
+        );
+        // Every shape that names one component takes a generic path with a space in it.
+        assert_eq!(
+            filter_names(&format!("find entities without component {two}")),
+            [two]
+        );
+        let parser = RegexQueryParser::new().unwrap();
+        let limited = parser
+            .parse(&format!("find 3 entities with component {two}"))
+            .expect("a spaced generic after `find N`");
+        assert_eq!(limited.limit, Some(3));
+        assert_eq!(
+            limited.request.params.unwrap()["filter"]["with"],
+            serde_json::json!([two])
+        );
+        assert_eq!(
+            filter_names(&format!(
+                "find entities with {two}, bevy_mesh::components::Mesh3d, {real}"
+            )),
             [two, "bevy_mesh::components::Mesh3d", real]
         );
     }

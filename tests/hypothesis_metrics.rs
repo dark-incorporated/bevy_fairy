@@ -10,13 +10,13 @@
 
 use std::sync::{Arc, Mutex};
 
-use axum::{extract::State, routing::post, Json, Router};
+use axum::{Json, Router, extract::State, routing::post};
 use bevy_fairy::server::brp_client::BrpClient;
 use bevy_fairy::server::config::Config;
 use bevy_fairy::server::hypothesis_system::PerformanceMetric;
 use rmcp::handler::server::tool::Parameters;
 use rmcp::model::CallToolResult;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use tokio::net::TcpListener;
 use tokio::sync::RwLock;
 
@@ -30,7 +30,11 @@ type SharedGame = Arc<Mutex<FakeGame>>;
 async fn answer(State(game): State<SharedGame>, body: String) -> Json<Value> {
     let request: Value = serde_json::from_str(&body).expect("the client sends JSON");
     let id = request.get("id").cloned().unwrap_or(Value::Null);
-    let method = request.get("method").and_then(Value::as_str).unwrap_or_default().to_string();
+    let method = request
+        .get("method")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_string();
 
     {
         let mut game = game.lock().expect("fake game lock");
@@ -60,7 +64,9 @@ async fn answer(State(game): State<SharedGame>, body: String) -> Json<Value> {
 }
 
 async fn start_fake_game(game: SharedGame) -> u16 {
-    let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind the fake game port");
+    let listener = TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("bind the fake game port");
     let port = listener.local_addr().expect("fake game address").port();
     let app = Router::new().route("/", post(answer)).with_state(game);
     tokio::spawn(async move {
@@ -96,7 +102,9 @@ async fn entity_count_is_measured_from_the_game() {
     let client = client_for(port);
 
     let mut client_guard = client.write().await;
-    let measured = PerformanceMetric::EntityCount.measure(&mut client_guard).await;
+    let measured = PerformanceMetric::EntityCount
+        .measure(&mut client_guard)
+        .await;
 
     assert!(
         measured.is_ok(),
@@ -125,7 +133,9 @@ async fn component_count_is_measured_from_the_game() {
     let client = client_for(port);
 
     let mut client_guard = client.write().await;
-    let measured = PerformanceMetric::ComponentCount.measure(&mut client_guard).await;
+    let measured = PerformanceMetric::ComponentCount
+        .measure(&mut client_guard)
+        .await;
 
     assert!(
         measured.is_ok(),
@@ -185,23 +195,29 @@ async fn a_refused_metric_reaches_the_agent() {
         .status(Parameters(bevy_fairy::server::mcp_tools::NoArgs {}))
         .await
         .expect("status returns a result");
-    assert!(!text_of(&status).contains("\"error\""), "the fake game should answer status");
+    assert!(
+        !text_of(&status).contains("\"error\""),
+        "the fake game should answer status"
+    );
 
     let outcome = tools
-        .hypothesis(Parameters(serde_json::from_value(json!({
-            "action": "test",
-            "description": "frame time stays under 16 ms",
-            "success_condition": {
-                "type": "performance_within",
-                "metric": "frame_time",
-                "max_value": 16.0
-            },
-            "actions": [
-                {"type": "spawn", "components": [{"type_id": "Transform", "value": {"x": 1.0}}]}
-            ],
-            "iterations": 1,
-            "timeout": 5,
-        })).expect("the request deserialises")))
+        .hypothesis(Parameters(
+            serde_json::from_value(json!({
+                "action": "test",
+                "description": "frame time stays under 16 ms",
+                "success_condition": {
+                    "type": "performance_within",
+                    "metric": "frame_time",
+                    "max_value": 16.0
+                },
+                "actions": [
+                    {"type": "spawn", "components": [{"type_id": "Transform", "value": {"x": 1.0}}]}
+                ],
+                "iterations": 1,
+                "timeout": 5,
+            }))
+            .expect("the request deserialises"),
+        ))
         .await;
 
     // The refusal is an error, not a result: the tool could not do what was asked, and saying so

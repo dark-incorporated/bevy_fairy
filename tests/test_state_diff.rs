@@ -557,15 +557,29 @@ fn test_diff_summary_calculation() {
 #[test]
 fn test_diff_summary_counts_each_modified_entity_once() {
     let modified = |entity, component: &str| {
-        Change::new(ChangeType::ComponentModified, entity, Some(component.to_string()), None, None)
+        Change::new(
+            ChangeType::ComponentModified,
+            entity,
+            Some(component.to_string()),
+            None,
+            None,
+        )
     };
-    let changes = vec![modified(7, "Transform"), modified(7, "Velocity"), modified(8, "Transform")];
+    let changes = vec![
+        modified(7, "Transform"),
+        modified(7, "Velocity"),
+        modified(8, "Transform"),
+    ];
 
     let summary = DiffSummary::from_changes(&changes);
 
     assert_eq!(summary.entities_modified, 2);
     assert_eq!(summary.components_modified, 3);
-    assert!(summary.format().contains("~2 entities"), "{}", summary.format());
+    assert!(
+        summary.format().contains("~2 entities"),
+        "{}",
+        summary.format()
+    );
 }
 
 #[test]

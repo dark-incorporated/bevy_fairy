@@ -27,11 +27,11 @@
 //! only reads (see [`DebugCommandInfo::read_only`]) is never recorded: replaying it would change
 //! nothing.
 
-use bevy::prelude::*;
-use bevy::remote::{error_codes, BrpResult, RemoteMethodSystemId, RemoteMethods};
-use serde::de::DeserializeOwned;
-use serde_json::{json, Value};
 use bevy::ecs::system::SystemId;
+use bevy::prelude::*;
+use bevy::remote::{BrpResult, RemoteMethodSystemId, RemoteMethods, error_codes};
+use serde::de::DeserializeOwned;
+use serde_json::{Value, json};
 
 use crate::plugin::ready::DebugReady;
 use crate::plugin::scene::{SceneLog, SceneStep};
@@ -151,7 +151,10 @@ pub(crate) fn add_builtin_command<P, M>(
 const RESERVED_PREFIXES: [&str; 5] = ["bevy_fairy/", "world.", "registry.", "rpc.", "schedule."];
 
 fn is_reserved(name: &str) -> bool {
-    name.is_empty() || RESERVED_PREFIXES.iter().any(|prefix| name.starts_with(prefix))
+    name.is_empty()
+        || RESERVED_PREFIXES
+            .iter()
+            .any(|prefix| name.starts_with(prefix))
 }
 
 fn register<P, M>(
@@ -219,10 +222,11 @@ where
             format!("{name}: {e}; example: {example}"),
         )
     })?;
-    let outcome = world
-        .run_system_with(handler, params)
-        .map_err(|e| crate::plugin::brp_error(error_codes::INTERNAL_ERROR, format!("{name}: {e:?}")))?;
-    let value = outcome.map_err(|message| crate::plugin::brp_error(error_codes::INTERNAL_ERROR, message))?;
+    let outcome = world.run_system_with(handler, params).map_err(|e| {
+        crate::plugin::brp_error(error_codes::INTERNAL_ERROR, format!("{name}: {e:?}"))
+    })?;
+    let value = outcome
+        .map_err(|message| crate::plugin::brp_error(error_codes::INTERNAL_ERROR, message))?;
     if records {
         world.get_resource_or_init::<SceneLog>().0.push(SceneStep {
             method: name.to_string(),

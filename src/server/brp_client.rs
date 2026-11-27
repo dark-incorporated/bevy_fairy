@@ -7,14 +7,16 @@
 
 use reqwest::Client;
 use serde_json::Value;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Duration;
 use tokio::time::Instant;
 use tracing::{debug, info, warn};
 
-use crate::server::brp::{builtin_methods, refusal_text, BrpPayload, BrpRequest, BrpResponse};
-use crate::server::brp_command_handler::{CommandHandlerRegistry, CoreBrpHandler, BrpCommandHandler};
+use crate::server::brp::{BrpPayload, BrpRequest, BrpResponse, builtin_methods, refusal_text};
+use crate::server::brp_command_handler::{
+    BrpCommandHandler, CommandHandlerRegistry, CoreBrpHandler,
+};
 use crate::server::config::Config;
 use crate::server::debug_command_processor::DebugCommandRouter;
 use crate::server::error::{Error, Result};
@@ -108,10 +110,7 @@ impl BrpClient {
         BrpClient {
             config: config.clone(),
             http,
-            url: format!(
-                "http://{}:{}",
-                config.bevy_brp_host, config.bevy_brp_port
-            ),
+            url: format!("http://{}:{}", config.bevy_brp_host, config.bevy_brp_port),
             connected: Arc::new(AtomicBool::new(false)),
             retry_count: 0,
             request_id: Arc::new(AtomicU64::new(1)),
@@ -273,7 +272,10 @@ impl BrpClient {
             .map_err(|e| {
                 self.connected.store(false, Ordering::Relaxed);
                 if e.is_timeout() && !e.is_connect() {
-                    Error::Timeout(format!("the game did not answer within {} s", REQUEST_TIMEOUT.as_secs()))
+                    Error::Timeout(format!(
+                        "the game did not answer within {} s",
+                        REQUEST_TIMEOUT.as_secs()
+                    ))
                 } else {
                     Error::Connection(format!("BRP HTTP request failed: {e}"))
                 }
@@ -282,7 +284,9 @@ impl BrpClient {
         let status = response.status();
         if !status.is_success() {
             self.connected.store(false, Ordering::Relaxed);
-            return Err(Error::Brp(format!("the game's BRP server answered with HTTP {status}")));
+            return Err(Error::Brp(format!(
+                "the game's BRP server answered with HTTP {status}"
+            )));
         }
 
         self.connected.store(true, Ordering::Relaxed);
@@ -294,21 +298,35 @@ impl BrpClient {
     /// each waiting for its answer, so they may land on different frames. Responses come back in the order of
     /// `requests`, matched by `id`; every request must carry one.
     pub async fn send_batch(&mut self, requests: &[BrpRequest]) -> Result<Vec<BrpResponse>> {
-        let response = self.http.post(&self.url).json(requests).send().await.map_err(|e| {
-            self.connected.store(false, Ordering::Relaxed);
-            if e.is_timeout() && !e.is_connect() {
-                Error::Timeout(format!("the game did not answer within {} s", REQUEST_TIMEOUT.as_secs()))
-            } else {
-                Error::Connection(format!("BRP HTTP request failed: {e}"))
-            }
-        })?;
+        let response = self
+            .http
+            .post(&self.url)
+            .json(requests)
+            .send()
+            .await
+            .map_err(|e| {
+                self.connected.store(false, Ordering::Relaxed);
+                if e.is_timeout() && !e.is_connect() {
+                    Error::Timeout(format!(
+                        "the game did not answer within {} s",
+                        REQUEST_TIMEOUT.as_secs()
+                    ))
+                } else {
+                    Error::Connection(format!("BRP HTTP request failed: {e}"))
+                }
+            })?;
         let status = response.status();
         if !status.is_success() {
             self.connected.store(false, Ordering::Relaxed);
-            return Err(Error::Brp(format!("the game's BRP server answered with HTTP {status}")));
+            return Err(Error::Brp(format!(
+                "the game's BRP server answered with HTTP {status}"
+            )));
         }
         self.connected.store(true, Ordering::Relaxed);
-        let mut answers = response.json::<Vec<BrpResponse>>().await.map_err(Error::from)?;
+        let mut answers = response
+            .json::<Vec<BrpResponse>>()
+            .await
+            .map_err(Error::from)?;
         let mut ordered = Vec::with_capacity(requests.len());
         for request in requests {
             let Some(position) = answers.iter().position(|answer| answer.id == request.id) else {
@@ -337,8 +355,16 @@ impl BrpClient {
     /// answer, it serves BRP without this crate's plugin, or its plugin is older than this server.
     pub async fn game_instance(&mut self) -> GameName {
         const METHOD: &str = "bevy_fairy/status";
-        let request = BrpRequest { method: METHOD.to_string(), id: Some(Value::from(1)), params: None };
-        instance_from(self.send_request(&request).await.map(|response| response.payload))
+        let request = BrpRequest {
+            method: METHOD.to_string(),
+            id: Some(Value::from(1)),
+            params: None,
+        };
+        instance_from(
+            self.send_request(&request)
+                .await
+                .map(|response| response.payload),
+        )
     }
 
     /// Disconnect: with HTTP there is no persistent connection to drop, so
@@ -353,12 +379,16 @@ impl BrpClient {
 fn instance_from(answer: Result<BrpPayload>) -> GameName {
     const METHOD: &str = "bevy_fairy/status";
     match answer {
-        Ok(BrpPayload::Result(status)) => {
-            status.get("instance").and_then(Value::as_str).map(str::to_string).ok_or_else(|| Unnamed {
-                why: format!("`{METHOD}` names no `instance`: the game's plugin is older than this server"),
+        Ok(BrpPayload::Result(status)) => status
+            .get("instance")
+            .and_then(Value::as_str)
+            .map(str::to_string)
+            .ok_or_else(|| Unnamed {
+                why: format!(
+                    "`{METHOD}` names no `instance`: the game's plugin is older than this server"
+                ),
                 answered_without_a_name: true,
-            })
-        }
+            }),
         Ok(BrpPayload::Error(error)) => Err(Unnamed {
             why: refusal_text(METHOD, &error),
             answered_without_a_name: error.code == bevy_remote::error_codes::METHOD_NOT_FOUND,
@@ -381,12 +411,18 @@ mod tests {
     use serde_json::json;
 
     fn refusal(code: i16) -> Result<BrpPayload> {
-        Ok(BrpPayload::Error(BrpError { code, message: "no".to_string(), data: None }))
+        Ok(BrpPayload::Error(BrpError {
+            code,
+            message: "no".to_string(),
+            data: None,
+        }))
     }
 
     #[test]
     fn a_status_that_names_an_instance_names_the_game() {
-        let answer = Ok(BrpPayload::Result(json!({"ready": true, "instance": "p1-n2-c3"})));
+        let answer = Ok(BrpPayload::Result(
+            json!({"ready": true, "instance": "p1-n2-c3"}),
+        ));
         assert_eq!(instance_from(answer), Ok("p1-n2-c3".to_string()));
     }
 
@@ -395,31 +431,54 @@ mod tests {
     #[test]
     fn a_status_with_no_instance_or_no_such_method_is_a_game_that_answered_without_a_name() {
         let older = instance_from(Ok(BrpPayload::Result(json!({"ready": true, "frame": 4}))));
-        assert!(older.expect_err("an older plugin names no instance").answered_without_a_name);
+        assert!(
+            older
+                .expect_err("an older plugin names no instance")
+                .answered_without_a_name
+        );
         let absent = instance_from(refusal(bevy_remote::error_codes::METHOD_NOT_FOUND));
-        assert!(absent.expect_err("no plugin, no method").answered_without_a_name);
+        assert!(
+            absent
+                .expect_err("no plugin, no method")
+                .answered_without_a_name
+        );
     }
 
     /// A game that was not asked successfully says nothing about which process it is.
     #[test]
     fn a_game_that_gave_no_usable_answer_is_not_known_to_have_no_plugin() {
         let internal = instance_from(refusal(bevy_remote::error_codes::INTERNAL_ERROR));
-        assert!(!internal.expect_err("an internal error names nothing").answered_without_a_name);
-        let down = instance_from(Err(Error::Timeout("the game did not answer within 5 s".to_string())));
+        assert!(
+            !internal
+                .expect_err("an internal error names nothing")
+                .answered_without_a_name
+        );
+        let down = instance_from(Err(Error::Timeout(
+            "the game did not answer within 5 s".to_string(),
+        )));
         let down = down.expect_err("a game that is down names nothing");
         assert!(!down.answered_without_a_name);
         assert!(down.why.contains("did not answer"), "{}", down.why);
-        let failing = instance_from(Err(Error::Brp("the game's BRP server answered with HTTP 500".to_string())));
+        let failing = instance_from(Err(Error::Brp(
+            "the game's BRP server answered with HTTP 500".to_string(),
+        )));
         let failing = failing.expect_err("an HTTP failure names nothing");
         assert!(!failing.answered_without_a_name);
-        assert!(failing.why.contains("answered") && failing.why.contains("500"), "{}", failing.why);
+        assert!(
+            failing.why.contains("answered") && failing.why.contains("500"),
+            "{}",
+            failing.why
+        );
     }
 
     #[test]
     fn only_a_game_that_answered_without_a_name_is_another_process_than_one_that_names_itself() {
         let named = |id: &str| -> GameName { Ok(id.to_string()) };
         let nameless = |answered_without_a_name| -> GameName {
-            Err(Unnamed { why: "no".to_string(), answered_without_a_name })
+            Err(Unnamed {
+                why: "no".to_string(),
+                answered_without_a_name,
+            })
         };
         assert!(certainly_another_game(&named("a"), &named("b")));
         assert!(!certainly_another_game(&named("a"), &named("a")));

@@ -12,14 +12,14 @@ use bevy_fairy::server::brp_command_handler::{
     BrpCommandHandler, CommandHandlerMetadata, CommandHandlerRegistry, CommandVersion,
 };
 use bevy_fairy::server::brp_messages::{
-    builtin_methods, BrpError, BrpPayload, BrpRequest, BrpResponse,
+    BrpError, BrpPayload, BrpRequest, BrpResponse, builtin_methods,
 };
 use bevy_fairy::server::brp_validation::{BrpValidator, ValidationConfig};
 use bevy_fairy::server::config::Config;
 use bevy_fairy::server::error::Result;
 
 use async_trait::async_trait;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -110,8 +110,16 @@ async fn test_version_compatibility() {
     let compatible_version = CommandVersion::new(1, 1, 0);
     let incompatible_version = CommandVersion::new(2, 0, 0);
 
-    assert!(registry.is_version_supported("versioned", &compatible_version).await);
-    assert!(!registry.is_version_supported("versioned", &incompatible_version).await);
+    assert!(
+        registry
+            .is_version_supported("versioned", &compatible_version)
+            .await
+    );
+    assert!(
+        !registry
+            .is_version_supported("versioned", &incompatible_version)
+            .await
+    );
 }
 
 #[tokio::test]
@@ -148,7 +156,10 @@ async fn test_backward_compatibility() {
     // because registration is async and a constructor cannot await. Production does this at startup
     // (`main.rs`, `mcp_server_v2.rs`), and a test that skips it is asserting against a client that
     // was never finished being built.
-    client.init().await.expect("client init registers the core handler");
+    client
+        .init()
+        .await
+        .expect("client init registers the core handler");
 
     let registry = client.command_registry();
 
@@ -156,12 +167,19 @@ async fn test_backward_compatibility() {
     let core_requests = vec![
         request(builtin_methods::BRP_QUERY_METHOD, None),
         request(builtin_methods::BRP_LIST_COMPONENTS_METHOD, None),
-        request(builtin_methods::BRP_GET_COMPONENTS_METHOD, Some(json!({ "entity": 1 }))),
+        request(
+            builtin_methods::BRP_GET_COMPONENTS_METHOD,
+            Some(json!({ "entity": 1 })),
+        ),
     ];
 
     for request in core_requests {
         let handler = registry.find_handler(&request).await;
-        assert!(handler.is_some(), "Core request {:?} should have a handler", request);
+        assert!(
+            handler.is_some(),
+            "Core request {:?} should have a handler",
+            request
+        );
     }
 }
 
@@ -273,16 +291,25 @@ async fn test_all_commands_have_handlers() {
     let config = Config::default();
     let client = BrpClient::new(&config);
     // See `test_backward_compatibility`: `init()` is what registers `CoreBrpHandler`.
-    client.init().await.expect("client init registers the core handler");
+    client
+        .init()
+        .await
+        .expect("client init registers the core handler");
     let registry = client.command_registry();
 
     // List of all core BRP methods that should be supported by the core handler.
     let test_requests = vec![
         request(builtin_methods::BRP_QUERY_METHOD, None),
-        request(builtin_methods::BRP_GET_COMPONENTS_METHOD, Some(json!({ "entity": 123 }))),
+        request(
+            builtin_methods::BRP_GET_COMPONENTS_METHOD,
+            Some(json!({ "entity": 123 })),
+        ),
         request(builtin_methods::BRP_LIST_COMPONENTS_METHOD, None),
         request(builtin_methods::BRP_SPAWN_ENTITY_METHOD, Some(json!({}))),
-        request(builtin_methods::BRP_DESPAWN_COMPONENTS_METHOD, Some(json!({ "entity": 123 }))),
+        request(
+            builtin_methods::BRP_DESPAWN_COMPONENTS_METHOD,
+            Some(json!({ "entity": 123 })),
+        ),
     ];
 
     for request in test_requests {

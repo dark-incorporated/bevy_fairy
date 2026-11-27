@@ -34,7 +34,7 @@ use bevy::window::ExitCondition;
 use bevy_fairy::{DebugCaptureTarget, DebugCommandInfo, DebugCommandsAppExt, DebuggerPlugin};
 use fixture_game::{Crate, Mover, Score, Spinner};
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// The params of `demo/spawn_cube`. `deny_unknown_fields` makes a typo a named error, not a silent
 /// default, so the agent learns the right shape from the error and the example.

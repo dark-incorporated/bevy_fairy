@@ -38,8 +38,12 @@ fn feature_registering(method: &str) -> Option<&'static str> {
         "bevy_fairy/screenshot" | "bevy_fairy/capture" => Some("plugin-screenshot"),
         "bevy_fairy/guide" | "bevy_fairy/guide+watch" => Some("plugin-guide"),
         "bevy_fairy/ui_text" => Some("plugin-ui-text"),
-        "bevy_fairy/input" | "bevy_fairy/status" | "bevy_fairy/commands" | "bevy_fairy/scene"
-        | "bevy_fairy/quit" | "bevy_fairy/time" => Some("plugin"),
+        "bevy_fairy/input"
+        | "bevy_fairy/status"
+        | "bevy_fairy/commands"
+        | "bevy_fairy/scene"
+        | "bevy_fairy/quit"
+        | "bevy_fairy/time" => Some("plugin"),
         _ => None,
     }
 }
@@ -84,7 +88,12 @@ pub fn entity_data_from_query_result(value: &serde_json::Value) -> Option<Vec<En
                 components.insert(k.clone(), v.clone());
             }
         }
-        for (k, v) in row.get("has").and_then(|c| c.as_object()).into_iter().flatten() {
+        for (k, v) in row
+            .get("has")
+            .and_then(|c| c.as_object())
+            .into_iter()
+            .flatten()
+        {
             components.insert(k.clone(), v.clone());
         }
         out.push(EntityData { id, components });
@@ -105,7 +114,10 @@ pub fn entity_data_from_get_result(
         .and_then(|c| c.as_object())
         .or_else(|| value.as_object())?;
     let components = map.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
-    Some(EntityData { id: entity, components })
+    Some(EntityData {
+        id: entity,
+        components,
+    })
 }
 
 /// Decode a `world.list_components` result (`["a::b::C", ...]`) into

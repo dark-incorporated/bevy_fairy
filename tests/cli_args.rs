@@ -86,9 +86,19 @@ fn the_tcp_flags_that_never_served_anything_are_refused() {
     for flag in ["--tcp", "--server"] {
         let out = bevy_fairy(&[flag]);
         let stderr = String::from_utf8_lossy(&out.stderr);
-        assert_eq!(out.status.code(), Some(2), "`{flag}` must be a usage error; stderr: {stderr}");
-        assert!(stderr.contains(flag), "the error must name `{flag}`; got: {stderr}");
+        assert_eq!(
+            out.status.code(),
+            Some(2),
+            "`{flag}` must be a usage error; stderr: {stderr}"
+        );
+        assert!(
+            stderr.contains(flag),
+            "the error must name `{flag}`; got: {stderr}"
+        );
     }
     let help = String::from_utf8_lossy(&bevy_fairy(&["--help"]).stdout).into_owned();
-    assert!(!help.contains("--tcp") && !help.contains("TCP"), "--help still advertises TCP: {help}");
+    assert!(
+        !help.contains("--tcp") && !help.contains("TCP"),
+        "--help still advertises TCP: {help}"
+    );
 }

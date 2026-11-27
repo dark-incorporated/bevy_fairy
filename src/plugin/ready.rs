@@ -10,10 +10,10 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use bevy::prelude::*;
 use bevy::remote::BrpResult;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use crate::plugin::commands::DebugCommands;
-use crate::plugin::scene::{SceneRejected, ScenePlayback};
+use crate::plugin::scene::{ScenePlayback, SceneRejected};
 
 /// Whether the game accepts debug commands yet. Read by every game command's wrapper.
 #[derive(Resource)]
@@ -60,7 +60,9 @@ pub(crate) fn handle_status(
     commands: Res<DebugCommands>,
     playback: Option<Res<ScenePlayback>>,
     rejected: Option<Res<SceneRejected>>,
-    #[cfg(feature = "plugin-screenshot")] target: Option<Res<crate::plugin::screenshot::DebugCaptureTarget>>,
+    #[cfg(feature = "plugin-screenshot")] target: Option<
+        Res<crate::plugin::screenshot::DebugCaptureTarget>,
+    >,
     #[cfg(feature = "plugin-screenshot")] windows: Query<(), With<bevy::window::PrimaryWindow>>,
 ) -> BrpResult {
     let replay = match (playback, rejected) {

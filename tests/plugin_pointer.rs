@@ -16,11 +16,11 @@ use bevy::picking::events::{
     PointerClick, PointerDrag, PointerDragEnd, PointerDragStart, PointerOut, PointerOver,
 };
 use bevy::prelude::*;
+use bevy::render::RenderPlugin;
 use bevy::render::render_resource::{TextureFormat, TextureUsages};
 use bevy::render::settings::{RenderCreation, WgpuSettings};
-use bevy::render::RenderPlugin;
-use bevy_fairy::{handle_input, DebugCaptureTarget, DebuggerPlugin};
-use serde_json::{json, Value};
+use bevy_fairy::{DebugCaptureTarget, DebuggerPlugin, handle_input};
+use serde_json::{Value, json};
 
 #[path = "helpers/headless.rs"]
 mod headless;
@@ -67,7 +67,9 @@ fn app(offscreen: bool) -> (App, Entity) {
         let mut image = Image::new_target_texture(1000, 600, TextureFormat::Rgba8UnormSrgb, None);
         image.texture_descriptor.usage |= TextureUsages::COPY_SRC;
         let handle = app.world_mut().resource_mut::<Assets<Image>>().add(image);
-        app.insert_resource(DebugCaptureTarget { image: handle.clone() });
+        app.insert_resource(DebugCaptureTarget {
+            image: handle.clone(),
+        });
         camera = app.world_mut().spawn(Camera2d);
         camera.insert(RenderTarget::Image(handle.into()));
     }
@@ -123,7 +125,10 @@ fn cursor(app: &mut App, at: Vec2) {
 }
 
 fn mouse(app: &mut App, action: &str) {
-    send(app, json!({"kind": "Mouse", "button": "Left", "action": action}));
+    send(
+        app,
+        json!({"kind": "Mouse", "button": "Left", "action": action}),
+    );
     frames(app, 4);
 }
 
@@ -153,9 +158,19 @@ fn a_click_on_an_offscreen_camera_node_fires_its_observer_exactly_once() {
 fn a_cursor_alone_hovers_and_moving_off_unhovers() {
     let (mut app, _) = app(false);
     cursor(&mut app, BUTTON_CENTRE);
-    assert_eq!((seen(&app).overs, seen(&app).outs), (1, 0), "{:?}", seen(&app));
+    assert_eq!(
+        (seen(&app).overs, seen(&app).outs),
+        (1, 0),
+        "{:?}",
+        seen(&app)
+    );
     cursor(&mut app, ELSEWHERE);
-    assert_eq!((seen(&app).overs, seen(&app).outs), (1, 1), "{:?}", seen(&app));
+    assert_eq!(
+        (seen(&app).overs, seen(&app).outs),
+        (1, 1),
+        "{:?}",
+        seen(&app)
+    );
     assert!(seen(&app).clicks.is_empty());
 }
 
@@ -183,5 +198,11 @@ fn a_click_with_no_cursor_says_where_it_will_land() {
         )
         .unwrap()
         .unwrap();
-    assert!(reply["note"].as_str().unwrap().contains("no injected cursor"), "{reply}");
+    assert!(
+        reply["note"]
+            .as_str()
+            .unwrap()
+            .contains("no injected cursor"),
+        "{reply}"
+    );
 }

@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-use crate::server::brp::{builtin_methods, BrpRequest, BrpResponse};
+use crate::server::brp::{BrpRequest, BrpResponse, builtin_methods};
 use crate::server::brp_validation::BrpValidator;
 use crate::server::error::{Error, Result};
 
@@ -27,7 +27,11 @@ pub struct CommandVersion {
 
 impl CommandVersion {
     pub fn new(major: u16, minor: u16, patch: u16) -> Self {
-        Self { major, minor, patch }
+        Self {
+            major,
+            minor,
+            patch,
+        }
     }
 
     pub fn is_compatible_with(&self, other: &CommandVersion) -> bool {
@@ -52,16 +56,16 @@ pub struct CommandHandlerMetadata {
 }
 
 /// Trait for handling BRP commands in an extensible way.
-/// 
+///
 /// Implementors of this trait can process specific types of BRP requests
 /// and return appropriate responses. Handlers are registered with a
 /// `CommandHandlerRegistry` and selected based on their ability to handle
 /// a request and their priority.
-/// 
+///
 /// # Example
 /// ```ignore
 /// struct MyHandler;
-/// 
+///
 /// #[async_trait]
 /// impl BrpCommandHandler for MyHandler {
 ///     fn metadata(&self) -> CommandHandlerMetadata { ... }
@@ -120,7 +124,7 @@ impl CommandHandlerRegistry {
             validator: Arc::new(BrpValidator::new()),
         }
     }
-    
+
     /// Create a new registry with custom validation configuration
     pub fn with_validator(validator: BrpValidator) -> Self {
         Self {
@@ -133,11 +137,11 @@ impl CommandHandlerRegistry {
     /// Register a new command handler
     pub async fn register(&self, handler: Arc<dyn BrpCommandHandler>) {
         let metadata = handler.metadata();
-        
+
         // Update version map
         let mut version_map = self.version_map.write().await;
         version_map.insert(metadata.name.clone(), metadata.version.clone());
-        
+
         // Add handler sorted by priority
         let mut handlers = self.handlers.write().await;
         handlers.push(handler);
@@ -147,13 +151,13 @@ impl CommandHandlerRegistry {
     /// Find a handler for the given request
     pub async fn find_handler(&self, request: &BrpRequest) -> Option<Arc<dyn BrpCommandHandler>> {
         let handlers = self.handlers.read().await;
-        
+
         for handler in handlers.iter() {
             if handler.can_handle(request) {
                 return Some(handler.clone());
             }
         }
-        
+
         None
     }
 
@@ -161,20 +165,26 @@ impl CommandHandlerRegistry {
     pub async fn process(&self, request: BrpRequest) -> Result<BrpResponse> {
         self.process_with_session(request, "default_session").await
     }
-    
+
     /// Process a request with session-specific validation
-    pub async fn process_with_session(&self, request: BrpRequest, session_id: &str) -> Result<BrpResponse> {
+    pub async fn process_with_session(
+        &self,
+        request: BrpRequest,
+        session_id: &str,
+    ) -> Result<BrpResponse> {
         if let Some(handler) = self.find_handler(&request).await {
             // First run comprehensive validation
             let request_size = serde_json::to_vec(&request)
                 .map_err(crate::server::error::Error::Json)?
                 .len();
-            
-            self.validator.validate_request(&request, session_id, request_size).await?;
-            
+
+            self.validator
+                .validate_request(&request, session_id, request_size)
+                .await?;
+
             // Then run handler-specific validation
             handler.validate(&request).await?;
-            
+
             // Finally handle the request
             handler.handle(request).await
         } else {
@@ -193,14 +203,14 @@ impl CommandHandlerRegistry {
     /// Check if a specific version is supported
     pub async fn is_version_supported(&self, handler_name: &str, version: &CommandVersion) -> bool {
         let version_map = self.version_map.read().await;
-        
+
         if let Some(registered_version) = version_map.get(handler_name) {
             registered_version.is_compatible_with(version)
         } else {
             false
         }
     }
-    
+
     /// Get the validator for configuration
     pub fn get_validator(&self) -> Arc<BrpValidator> {
         self.validator.clone()
@@ -301,7 +311,7 @@ mod tests {
                     version: CommandVersion::default(),
                     description: "High priority handler".to_string(),
                     supported_commands: vec![
-                        builtin_methods::BRP_LIST_COMPONENTS_METHOD.to_string()
+                        builtin_methods::BRP_LIST_COMPONENTS_METHOD.to_string(),
                     ],
                 }
             }

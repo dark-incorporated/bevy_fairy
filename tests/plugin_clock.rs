@@ -10,7 +10,7 @@ use bevy::prelude::*;
 use bevy::remote::{BrpResult, RemoteMethodSystemId, RemoteMethods};
 use bevy::time::{TimeUpdateStrategy, Virtual};
 use bevy_fairy::{ClockRequest, DebuggerPlugin};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 const FRAME: Duration = Duration::from_millis(16);
 
@@ -24,11 +24,17 @@ fn app_with(plugin: DebuggerPlugin) -> App {
 }
 
 fn call(app: &mut App, params: Option<Value>) -> BrpResult {
-    let id = match app.world().resource::<RemoteMethods>().get("bevy_fairy/time") {
+    let id = match app
+        .world()
+        .resource::<RemoteMethods>()
+        .get("bevy_fairy/time")
+    {
         Some(RemoteMethodSystemId::Instant(id)) => *id,
         _ => panic!("bevy_fairy/time is not registered"),
     };
-    app.world_mut().run_system_with(id, params).expect("handler runs")
+    app.world_mut()
+        .run_system_with(id, params)
+        .expect("handler runs")
 }
 
 fn run(app: &mut App, frames: u32) -> Duration {
@@ -68,7 +74,11 @@ fn a_pause_holds_against_a_host_that_unpauses_every_frame() {
 
     call(&mut app, Some(json!({ "pause": true }))).expect("time answers");
     let moved = run(&mut app, 60);
-    assert_eq!(moved, Duration::ZERO, "virtual time moved while the agent held a pause");
+    assert_eq!(
+        moved,
+        Duration::ZERO,
+        "virtual time moved while the agent held a pause"
+    );
 
     let read = call(&mut app, None).expect("an empty call reads the clock");
     assert_eq!(read["held"], true, "{read}");
@@ -88,7 +98,10 @@ fn a_speed_holds_against_a_host_that_resets_it_every_frame() {
     assert!((ratio - 4.0).abs() < 0.1, "clock ran {ratio}x, wanted 4x");
     let read = call(&mut app, None).expect("read");
     assert_eq!(read["held"], true, "{read}");
-    assert!((read["effective_speed"].as_f64().unwrap() - 4.0).abs() < 1e-6, "{read}");
+    assert!(
+        (read["effective_speed"].as_f64().unwrap() - 4.0).abs() < 1e-6,
+        "{read}"
+    );
 }
 
 #[test]
@@ -103,9 +116,15 @@ fn a_host_that_owns_the_clock_is_never_written_to_and_learns_the_request() {
     assert_eq!(request.speed, 2.0);
 
     let moved = run(&mut app, 30);
-    assert!(moved > Duration::ZERO, "the crate wrote Time<Virtual> in host-owned mode");
+    assert!(
+        moved > Duration::ZERO,
+        "the crate wrote Time<Virtual> in host-owned mode"
+    );
     let read = call(&mut app, None).expect("read");
-    assert_eq!(read["held"], false, "a host that ignores the request is not held: {read}");
+    assert_eq!(
+        read["held"], false,
+        "a host that ignores the request is not held: {read}"
+    );
     assert_eq!(read["host_owned"], true, "{read}");
 }
 
@@ -118,10 +137,17 @@ fn a_request_survives_a_host_state_change_until_cleared() {
 
     // The host resets its own world state (a new game); the agent's request is not part of it.
     app.world_mut().insert_resource(Time::<Virtual>::default());
-    assert_eq!(run(&mut app, 30), Duration::ZERO, "the pause was lost with the host's reset");
+    assert_eq!(
+        run(&mut app, 30),
+        Duration::ZERO,
+        "the pause was lost with the host's reset"
+    );
 
     call(&mut app, Some(json!({ "pause": false }))).expect("clear");
-    assert!(run(&mut app, 5) > Duration::ZERO, "clearing the pause did not resume the clock");
+    assert!(
+        run(&mut app, 5) > Duration::ZERO,
+        "clearing the pause did not resume the clock"
+    );
 }
 
 #[test]
@@ -140,7 +166,10 @@ fn a_request_is_not_called_held_before_a_frame_has_run_under_it() {
     let mut app = app_with(DebuggerPlugin::default());
     run(&mut app, 3);
     let reply = call(&mut app, Some(json!({ "pause": true }))).expect("answers");
-    assert!(reply["held"].is_null(), "held claimed with no frame observed: {reply}");
+    assert!(
+        reply["held"].is_null(),
+        "held claimed with no frame observed: {reply}"
+    );
     assert!(reply["unavailable"].is_string(), "{reply}");
 }
 
@@ -151,10 +180,15 @@ fn a_request_is_not_called_held_before_a_frame_has_run_under_it() {
 fn a_speed_the_clock_cannot_represent_is_refused_not_applied() {
     let mut app = app_with(DebuggerPlugin::default());
     for bad in [1e30, 1e21, f32::MAX, 1000.5] {
-        let err = call(&mut app, Some(json!({ "speed": bad }))).expect_err("a speed above the bound");
+        let err =
+            call(&mut app, Some(json!({ "speed": bad }))).expect_err("a speed above the bound");
         assert!(err.message.contains("speed"), "{err:?}");
     }
-    assert_eq!(app.world().resource::<ClockRequest>().speed, 1.0, "a refused speed was stored");
+    assert_eq!(
+        app.world().resource::<ClockRequest>().speed,
+        1.0,
+        "a refused speed was stored"
+    );
     run(&mut app, 3); // before the fix this panicked inside bevy_time's advance_with_raw_delta
     let read = call(&mut app, None).expect("read");
     assert_eq!(read["speed"], 1.0, "{read}");
@@ -179,10 +213,19 @@ fn a_speed_the_engine_clamps_is_held_and_says_it_was_clamped() {
     call(&mut app, Some(json!({ "speed": 20.0 }))).expect("answers");
     run(&mut app, 3);
     let read = call(&mut app, None).expect("read");
-    assert_eq!(read["held"], true, "no host system touched the clock: {read}");
+    assert_eq!(
+        read["held"], true,
+        "no host system touched the clock: {read}"
+    );
     assert_eq!(read["clamped_by_max_delta"], true, "{read}");
-    assert!((read["effective_speed"].as_f64().unwrap() - 15.625).abs() < 1e-3, "{read}");
-    assert_eq!(read["speed"], 20.0, "the speed in force is the one asked for: {read}");
+    assert!(
+        (read["effective_speed"].as_f64().unwrap() - 15.625).abs() < 1e-3,
+        "{read}"
+    );
+    assert_eq!(
+        read["speed"], 20.0,
+        "the speed in force is the one asked for: {read}"
+    );
 
     // A speed under the clamp is not reported as clamped.
     call(&mut app, Some(json!({ "speed": 4.0 }))).expect("answers");
@@ -201,7 +244,10 @@ fn a_host_that_ignores_a_clamped_speed_is_still_not_held() {
     run(&mut app, 3);
     let read = call(&mut app, None).expect("read");
     assert_eq!(read["held"], false, "{read}");
-    assert_eq!(read["clamped_by_max_delta"], false, "the host's 1x speed was not clamped: {read}");
+    assert_eq!(
+        read["clamped_by_max_delta"], false,
+        "the host's 1x speed was not clamped: {read}"
+    );
 }
 
 /// **B-129.** The agent asks for the clock to run and the host holds it paused. `held` said true,
@@ -214,10 +260,17 @@ fn an_unpause_the_host_overrides_is_not_held() {
     run(&mut app, 5);
 
     call(&mut app, Some(json!({ "pause": false }))).expect("answers");
-    assert_eq!(run(&mut app, 30), Duration::ZERO, "the host's pause held the clock");
+    assert_eq!(
+        run(&mut app, 30),
+        Duration::ZERO,
+        "the host's pause held the clock"
+    );
     let read = call(&mut app, None).expect("read");
     assert_eq!(read["paused"], true, "{read}");
-    assert_eq!(read["held"], false, "asked to run, clock paused, and held said true: {read}");
+    assert_eq!(
+        read["held"], false,
+        "asked to run, clock paused, and held said true: {read}"
+    );
 }
 
 /// **B-129.** The same for speed: a request of 1.0 was never checked against the clock, so a host
@@ -231,8 +284,14 @@ fn a_speed_of_one_the_host_overrides_is_not_held() {
     call(&mut app, Some(json!({ "speed": 1.0 }))).expect("answers");
     run(&mut app, 30);
     let read = call(&mut app, None).expect("read");
-    assert!((read["effective_speed"].as_f64().unwrap() - 0.5).abs() < 1e-6, "{read}");
-    assert_eq!(read["held"], false, "asked for real time, clock at half, and held said true: {read}");
+    assert!(
+        (read["effective_speed"].as_f64().unwrap() - 0.5).abs() < 1e-6,
+        "{read}"
+    );
+    assert_eq!(
+        read["held"], false,
+        "asked for real time, clock at half, and held said true: {read}"
+    );
 }
 
 /// The other side of the two above: with nobody fighting, the same requests are held, so the fix
@@ -259,7 +318,11 @@ fn a_pause_is_held_beside_a_hosts_own_slow_motion() {
     run(&mut app, 5);
 
     call(&mut app, Some(json!({ "pause": true }))).expect("answers");
-    assert_eq!(run(&mut app, 30), Duration::ZERO, "the pause froze the clock");
+    assert_eq!(
+        run(&mut app, 30),
+        Duration::ZERO,
+        "the pause froze the clock"
+    );
     let read = call(&mut app, None).expect("read");
     assert_eq!(read["paused"], true, "{read}");
     assert_eq!(read["held"], true, "a frozen clock obeyed a pause: {read}");

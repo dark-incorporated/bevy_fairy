@@ -8,12 +8,12 @@
  * JSON-RPC 2.0 envelope (`{ method, id, params }`), not a hand-rolled enum.
  */
 
-use bevy_fairy::server::brp_messages::{builtin_methods, BrpRequest};
+use bevy_fairy::server::brp_messages::{BrpRequest, builtin_methods};
 use bevy_fairy::server::brp_validation::{
     BrpValidator, ComponentRegistry, EntityTracker, PermissionLevel, ValidationConfig,
 };
 use std::collections::HashMap;
-use tokio::time::{sleep, Duration};
+use tokio::time::{Duration, sleep};
 
 /// Helper: build a `BrpRequest` envelope for a method.
 fn request(method: &str, params: Option<serde_json::Value>) -> BrpRequest {
@@ -31,8 +31,13 @@ async fn test_basic_request_validation() {
     let session_id = "test_session";
     let request_size = 100;
 
-    let result = validator.validate_request(&request, session_id, request_size).await;
-    assert!(result.is_ok(), "Basic ListComponents request should pass validation");
+    let result = validator
+        .validate_request(&request, session_id, request_size)
+        .await;
+    assert!(
+        result.is_ok(),
+        "Basic ListComponents request should pass validation"
+    );
 }
 
 #[tokio::test]
@@ -46,7 +51,9 @@ async fn test_request_size_limits() {
     assert!(result.is_ok());
 
     // Should fail with oversized request
-    let result = validator.validate_request(&request, session_id, usize::MAX).await;
+    let result = validator
+        .validate_request(&request, session_id, usize::MAX)
+        .await;
     assert!(result.is_err());
 
     let error_message = result.unwrap_err().to_string();
@@ -65,12 +72,16 @@ async fn test_rate_limiting() {
 
     // First three requests should pass
     for i in 1..=3 {
-        let result = validator.validate_request(&request, session_id, request_size).await;
+        let result = validator
+            .validate_request(&request, session_id, request_size)
+            .await;
         assert!(result.is_ok(), "Request {} should pass", i);
     }
 
     // Fourth request should fail due to rate limiting
-    let result = validator.validate_request(&request, session_id, request_size).await;
+    let result = validator
+        .validate_request(&request, session_id, request_size)
+        .await;
     assert!(result.is_err());
 
     let error_message = result.unwrap_err().to_string();
@@ -89,17 +100,34 @@ async fn test_rate_limiting_window_reset() {
     let request_size = 100;
 
     // Use up the rate limit
-    assert!(validator.validate_request(&request, session_id, request_size).await.is_ok());
-    assert!(validator.validate_request(&request, session_id, request_size).await.is_ok());
+    assert!(
+        validator
+            .validate_request(&request, session_id, request_size)
+            .await
+            .is_ok()
+    );
+    assert!(
+        validator
+            .validate_request(&request, session_id, request_size)
+            .await
+            .is_ok()
+    );
 
     // Third request should fail
-    assert!(validator.validate_request(&request, session_id, request_size).await.is_err());
+    assert!(
+        validator
+            .validate_request(&request, session_id, request_size)
+            .await
+            .is_err()
+    );
 
     // Wait for window reset (rate limit window is 1 second)
     sleep(Duration::from_millis(1100)).await;
 
     // Should be able to make requests again
-    let result = validator.validate_request(&request, session_id, request_size).await;
+    let result = validator
+        .validate_request(&request, session_id, request_size)
+        .await;
     assert!(result.is_ok(), "Request should pass after window reset");
 }
 
@@ -110,11 +138,19 @@ async fn test_permission_levels() {
     let request_size = 100;
 
     // Set read-only permissions
-    validator.update_session_permissions(session_id, PermissionLevel::Read).await.unwrap();
+    validator
+        .update_session_permissions(session_id, PermissionLevel::Read)
+        .await
+        .unwrap();
 
     // Read operations should pass
     let read_request = request(builtin_methods::BRP_LIST_COMPONENTS_METHOD, None);
-    assert!(validator.validate_request(&read_request, session_id, request_size).await.is_ok());
+    assert!(
+        validator
+            .validate_request(&read_request, session_id, request_size)
+            .await
+            .is_ok()
+    );
 
     let query_request = request(
         builtin_methods::BRP_QUERY_METHOD,
@@ -123,14 +159,21 @@ async fn test_permission_levels() {
             "filter": { "with": ["Transform"], "without": [] }
         })),
     );
-    assert!(validator.validate_request(&query_request, session_id, request_size).await.is_ok());
+    assert!(
+        validator
+            .validate_request(&query_request, session_id, request_size)
+            .await
+            .is_ok()
+    );
 
     // Write operations should fail
     let destroy_request = request(
         builtin_methods::BRP_DESPAWN_COMPONENTS_METHOD,
         Some(serde_json::json!({ "entity": 123 })),
     );
-    let result = validator.validate_request(&destroy_request, session_id, request_size).await;
+    let result = validator
+        .validate_request(&destroy_request, session_id, request_size)
+        .await;
     assert!(result.is_err());
 
     let error_message = result.unwrap_err().to_string();
@@ -145,20 +188,33 @@ async fn test_permission_upgrade() {
     let request_size = 100;
 
     // Start with read permissions
-    validator.update_session_permissions(session_id, PermissionLevel::Read).await.unwrap();
+    validator
+        .update_session_permissions(session_id, PermissionLevel::Read)
+        .await
+        .unwrap();
 
     let write_request = request(
         builtin_methods::BRP_DESPAWN_COMPONENTS_METHOD,
         Some(serde_json::json!({ "entity": 123 })),
     );
-    assert!(validator.validate_request(&write_request, session_id, request_size).await.is_err());
+    assert!(
+        validator
+            .validate_request(&write_request, session_id, request_size)
+            .await
+            .is_err()
+    );
 
     // Upgrade to write permissions
-    validator.update_session_permissions(session_id, PermissionLevel::Write).await.unwrap();
+    validator
+        .update_session_permissions(session_id, PermissionLevel::Write)
+        .await
+        .unwrap();
 
     // Now write operations should pass (though they might fail for other reasons like entity existence)
     // We're just testing permission validation here
-    let result = validator.validate_request(&write_request, session_id, request_size).await;
+    let result = validator
+        .validate_request(&write_request, session_id, request_size)
+        .await;
     // The validation might still fail due to entity existence checks, but not due to permissions
     if let Err(e) = result {
         assert!(!e.to_string().contains("Insufficient permissions"));
@@ -174,7 +230,10 @@ async fn test_entity_existence_validation() {
     let request_size = 100;
 
     // Set write permissions to bypass permission checks
-    validator.update_session_permissions(session_id, PermissionLevel::Write).await.unwrap();
+    validator
+        .update_session_permissions(session_id, PermissionLevel::Write)
+        .await
+        .unwrap();
 
     // Update entity tracker with some entities
     let entity_tracker = validator.get_entity_tracker();
@@ -187,7 +246,9 @@ async fn test_entity_existence_validation() {
         builtin_methods::BRP_GET_COMPONENTS_METHOD,
         Some(serde_json::json!({ "entity": 123 })),
     );
-    let result = validator.validate_request(&valid_request, session_id, request_size).await;
+    let result = validator
+        .validate_request(&valid_request, session_id, request_size)
+        .await;
     // Might still fail due to component registry, but not entity existence
     if let Err(e) = result {
         assert!(!e.to_string().contains("does not exist"));
@@ -198,7 +259,9 @@ async fn test_entity_existence_validation() {
         builtin_methods::BRP_GET_COMPONENTS_METHOD,
         Some(serde_json::json!({ "entity": 999 })),
     );
-    let result = validator.validate_request(&invalid_request, session_id, request_size).await;
+    let result = validator
+        .validate_request(&invalid_request, session_id, request_size)
+        .await;
     assert!(result.is_err());
 
     let error_message = result.unwrap_err().to_string();
@@ -219,7 +282,10 @@ async fn test_component_registry_validation() {
     let request_size = 100;
 
     // Set write permissions and disable entity existence checks for this test
-    validator.update_session_permissions(session_id, PermissionLevel::Write).await.unwrap();
+    validator
+        .update_session_permissions(session_id, PermissionLevel::Write)
+        .await
+        .unwrap();
 
     // Test with registered component type (Transform is registered by default)
     let valid_request = request(
@@ -237,7 +303,9 @@ async fn test_component_registry_validation() {
     );
 
     // This might still fail due to other validations, but not component registry
-    let result = validator.validate_request(&valid_request, session_id, request_size).await;
+    let result = validator
+        .validate_request(&valid_request, session_id, request_size)
+        .await;
     if let Err(e) = result {
         assert!(!e.to_string().contains("is not registered"));
     }
@@ -251,7 +319,9 @@ async fn test_component_registry_validation() {
         })),
     );
 
-    let result = validator.validate_request(&invalid_request, session_id, request_size).await;
+    let result = validator
+        .validate_request(&invalid_request, session_id, request_size)
+        .await;
     assert!(result.is_err());
 
     let error_message = result.unwrap_err().to_string();
@@ -267,7 +337,10 @@ async fn test_component_value_size_limits() {
     let session_id = "size_test_session";
     let request_size = 1000;
 
-    validator.update_session_permissions(session_id, PermissionLevel::Write).await.unwrap();
+    validator
+        .update_session_permissions(session_id, PermissionLevel::Write)
+        .await
+        .unwrap();
 
     // Create a large component value
     let large_value = serde_json::json!({
@@ -282,7 +355,9 @@ async fn test_component_value_size_limits() {
         })),
     );
 
-    let result = validator.validate_request(&request, session_id, request_size).await;
+    let result = validator
+        .validate_request(&request, session_id, request_size)
+        .await;
     assert!(result.is_err());
 
     let error_message = result.unwrap_err().to_string();
@@ -309,7 +384,9 @@ async fn test_query_limits() {
         })),
     );
 
-    let result = validator.validate_request(&valid_query, session_id, request_size).await;
+    let result = validator
+        .validate_request(&valid_query, session_id, request_size)
+        .await;
     assert!(result.is_ok());
 
     // **A larger `limit` is accepted too, and that is the contract** — the same one the comment above
@@ -327,7 +404,9 @@ async fn test_query_limits() {
         })),
     );
 
-    let result = validator.validate_request(&larger_query, session_id, request_size).await;
+    let result = validator
+        .validate_request(&larger_query, session_id, request_size)
+        .await;
     assert!(
         result.is_ok(),
         "world.query limits are the server's business; the client validator must not reject one: {result:?}"
@@ -377,8 +456,14 @@ async fn test_session_management() {
     let session2 = "session2";
 
     // Set different permissions for different sessions
-    validator.update_session_permissions(session1, PermissionLevel::Read).await.unwrap();
-    validator.update_session_permissions(session2, PermissionLevel::Admin).await.unwrap();
+    validator
+        .update_session_permissions(session1, PermissionLevel::Read)
+        .await
+        .unwrap();
+    validator
+        .update_session_permissions(session2, PermissionLevel::Admin)
+        .await
+        .unwrap();
 
     // The debug method maps to an Admin permission (unknown method -> Admin).
     let admin_request = request(
@@ -387,11 +472,15 @@ async fn test_session_management() {
     );
 
     // Session1 (Read) should pass for a Read method.
-    let result = validator.validate_request(&admin_request, session1, 100).await;
+    let result = validator
+        .validate_request(&admin_request, session1, 100)
+        .await;
     assert!(result.is_ok());
 
     // Session2 (Admin) should also pass.
-    let result = validator.validate_request(&admin_request, session2, 100).await;
+    let result = validator
+        .validate_request(&admin_request, session2, 100)
+        .await;
     assert!(result.is_ok());
 }
 
@@ -407,7 +496,10 @@ async fn test_error_message_quality() {
     let request = request(builtin_methods::BRP_LIST_COMPONENTS_METHOD, None);
 
     // Use up rate limit
-    validator.validate_request(&request, session_id, 100).await.unwrap();
+    validator
+        .validate_request(&request, session_id, 100)
+        .await
+        .unwrap();
 
     // Next request should have helpful error
     let result = validator.validate_request(&request, session_id, 100).await;
@@ -454,7 +546,10 @@ async fn test_comprehensive_validation_pipeline() {
     let session_id = "pipeline_test_session";
 
     // Set up proper permissions
-    validator.update_session_permissions(session_id, PermissionLevel::Write).await.unwrap();
+    validator
+        .update_session_permissions(session_id, PermissionLevel::Write)
+        .await
+        .unwrap();
 
     // Set up entity tracker
     let entity_tracker = validator.get_entity_tracker();
@@ -477,8 +572,13 @@ async fn test_comprehensive_validation_pipeline() {
         })),
     );
 
-    let result = validator.validate_request(&valid_request, session_id, 1000).await;
-    assert!(result.is_ok(), "Comprehensive valid request should pass all validations");
+    let result = validator
+        .validate_request(&valid_request, session_id, 1000)
+        .await;
+    assert!(
+        result.is_ok(),
+        "Comprehensive valid request should pass all validations"
+    );
 
     // Invalid request that should fail multiple validations
     let invalid_request = request(
@@ -489,6 +589,8 @@ async fn test_comprehensive_validation_pipeline() {
         })),
     );
 
-    let result = validator.validate_request(&invalid_request, session_id, 1000).await;
+    let result = validator
+        .validate_request(&invalid_request, session_id, 1000)
+        .await;
     assert!(result.is_err(), "Invalid request should fail validation");
 }

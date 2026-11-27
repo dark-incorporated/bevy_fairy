@@ -32,10 +32,12 @@
 //! 4. **The transcript is `k/n`, never a boolean.** Bryant, *Game Testing All in One* 4e: a tester who
 //!    ran the steps twice and saw it twice will report 100%, and it is just as likely to be 50%.
 
-use bevy::prelude::*;
-use bevy_fairy::{evaluate_checkpoint, handle_guide, watch_guide, Checkpoints, Guide, GuideOverlayPlugin};
 use bevy::ecs::system::RunSystemOnce;
-use serde_json::{json, Value};
+use bevy::prelude::*;
+use bevy_fairy::{
+    Checkpoints, Guide, GuideOverlayPlugin, evaluate_checkpoint, handle_guide, watch_guide,
+};
+use serde_json::{Value, json};
 
 /// The host's own state. This crate never learns what any of it means -- it only runs the conditions
 /// the host registered, by the names the host chose.

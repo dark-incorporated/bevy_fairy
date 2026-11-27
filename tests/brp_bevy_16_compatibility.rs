@@ -7,9 +7,9 @@
  */
 
 use bevy_fairy::server::brp_messages::{
-    builtin_methods, BrpPayload, BrpRequest, BrpResponse, QueryFilter,
+    BrpPayload, BrpRequest, BrpResponse, QueryFilter, builtin_methods,
 };
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 #[tokio::test]
 async fn test_bevy_16_strict_query_parameter() {
@@ -58,7 +58,10 @@ async fn test_bevy_16_new_brp_methods() {
     let json_str = serde_json::to_string(&insert_request).unwrap();
     let json_value: Value = serde_json::from_str(&json_str).unwrap();
 
-    assert_eq!(json_value["method"], builtin_methods::BRP_INSERT_COMPONENTS_METHOD);
+    assert_eq!(
+        json_value["method"],
+        builtin_methods::BRP_INSERT_COMPONENTS_METHOD
+    );
     assert_eq!(json_value["params"]["entity"], 12345);
 
     // Test `world.remove_components` method
@@ -74,9 +77,15 @@ async fn test_bevy_16_new_brp_methods() {
     let json_str = serde_json::to_string(&remove_request).unwrap();
     let json_value: Value = serde_json::from_str(&json_str).unwrap();
 
-    assert_eq!(json_value["method"], builtin_methods::BRP_REMOVE_COMPONENTS_METHOD);
+    assert_eq!(
+        json_value["method"],
+        builtin_methods::BRP_REMOVE_COMPONENTS_METHOD
+    );
     assert_eq!(json_value["params"]["entity"], 12345);
-    assert_eq!(json_value["params"]["components"].as_array().unwrap().len(), 2);
+    assert_eq!(
+        json_value["params"]["components"].as_array().unwrap().len(),
+        2
+    );
 
     // Test `world.reparent_entities` method
     let reparent_request = BrpRequest {
@@ -91,7 +100,10 @@ async fn test_bevy_16_new_brp_methods() {
     let json_str = serde_json::to_string(&reparent_request).unwrap();
     let json_value: Value = serde_json::from_str(&json_str).unwrap();
 
-    assert_eq!(json_value["method"], builtin_methods::BRP_REPARENT_ENTITIES_METHOD);
+    assert_eq!(
+        json_value["method"],
+        builtin_methods::BRP_REPARENT_ENTITIES_METHOD
+    );
     assert_eq!(json_value["params"]["entities"][0], 12345);
     assert_eq!(json_value["params"]["parent"], 67890);
 }
@@ -112,7 +124,9 @@ async fn test_backwards_compatibility_with_legacy_queries() {
     let json_value: Value = serde_json::from_str(&json_str).unwrap();
 
     // Strict parameter should not be present in JSON when not set
-    assert!(json_value["params"].get("strict").is_none() || json_value["params"]["strict"].is_null());
+    assert!(
+        json_value["params"].get("strict").is_none() || json_value["params"]["strict"].is_null()
+    );
 
     // Should still deserialize correctly
     let deserialized: BrpRequest = serde_json::from_str(&json_str).unwrap();
@@ -241,13 +255,16 @@ async fn test_real_bevy_16_integration() {
     // Create a minimal Bevy app with remote plugin
     let mut app = App::new();
     app.add_plugins(MinimalPlugins)
-       .add_plugins(bevy::remote::RemotePlugin::default());
+        .add_plugins(bevy::remote::RemotePlugin::default());
 
     // Spawn a test entity and read its generation-aware id.
-    let entity_id = app.world_mut().spawn((
-        Transform::from_translation(Vec3::new(1.0, 2.0, 3.0)),
-        Name::new("TestEntity"),
-    )).id();
+    let entity_id = app
+        .world_mut()
+        .spawn((
+            Transform::from_translation(Vec3::new(1.0, 2.0, 3.0)),
+            Name::new("TestEntity"),
+        ))
+        .id();
 
     // Bevy's BRP serialises an entity as a u64, and Bevy 0.20's `Entity::to_bits` is
     // `index.to_bits() | (generation.to_bits() << 32)`.

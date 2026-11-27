@@ -29,8 +29,8 @@
 //!    while shut so the opening keystroke cannot become their first character; sent together, the
 //!    text would be eaten by that guard and the method would still report success.
 
-use bevy::input::keyboard::{Key, KeyboardInput};
 use bevy::input::InputSystems;
+use bevy::input::keyboard::{Key, KeyboardInput};
 use bevy::prelude::*;
 use bevy_fairy::{InputAction, PendingInput};
 
@@ -104,7 +104,10 @@ fn main() {
         Some("porch a"),
         "the whole name must have been typed and committed"
     );
-    println!("  committed: {:?}  — asserted, so this example fails loudly if it rots\n", field.committed);
+    println!(
+        "  committed: {:?}  — asserted, so this example fails loudly if it rots\n",
+        field.committed
+    );
 }
 
 /// The shape of a real text field: read the stream, match `logical_key`, ignore releases.
@@ -122,7 +125,8 @@ fn field_keys(
         });
         if opened {
             field.open = true;
-            log.0.push("field opened (stream drained, nothing typed)".to_owned());
+            log.0
+                .push("field opened (stream drained, nothing typed)".to_owned());
         } else {
             log.0.push("shut".to_owned());
         }

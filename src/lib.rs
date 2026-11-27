@@ -93,27 +93,29 @@ pub mod server;
 pub mod crop;
 
 #[cfg(feature = "crop")]
-pub use crop::{crop_png, Crop, CropRect};
+pub use crop::{Crop, CropRect, crop_png};
 
 // The plugin's own items are re-exported at the root, so a game writes
 // `use bevy_fairy::DebuggerPlugin` rather than `use bevy_fairy::plugin::DebuggerPlugin`. The
 // module is still there for anyone who wants to be explicit.
 #[cfg(feature = "plugin")]
 pub use plugin::{
-    apply_pending_input, cursor_position, handle_input, ClockRequest, logical_for, typed, DebugCommandInfo,
-    DebugCommands, DebugCommandsAppExt, DebugCursor, DebugReady, DebuggerPlugin, InputAction,
-    InputCommand, InputKind, PendingInput, SceneLog, ScenePlayback, SceneStep,
+    ClockRequest, DebugCommandInfo, DebugCommands, DebugCommandsAppExt, DebugCursor, DebugReady,
+    DebuggerPlugin, InputAction, InputCommand, InputKind, PendingInput, SceneLog, ScenePlayback,
+    SceneStep, apply_pending_input, cursor_position, handle_input, logical_for, typed,
 };
 
 // The guide overlay and the capture target, which are their own features.
 #[cfg(feature = "plugin-guide")]
 pub use plugin::{
-    evaluate_checkpoint, handle_guide, watch_guide, Checkpoints, Guide, GuideOverlay,
-    GuideOverlayPlugin, GuideParams, GuidePlacement, Step, StepRecord, BEAT_SECONDS,
+    BEAT_SECONDS, Checkpoints, Guide, GuideOverlay, GuideOverlayPlugin, GuideParams,
+    GuidePlacement, Step, StepRecord, evaluate_checkpoint, handle_guide, watch_guide,
 };
 
 #[cfg(feature = "plugin-screenshot")]
-pub use plugin::{handle_screenshot, CaptureState, Captures, DebugCaptureTarget, Provenance, ScreenshotParams};
+pub use plugin::{
+    CaptureState, Captures, DebugCaptureTarget, Provenance, ScreenshotParams, handle_screenshot,
+};
 
 #[cfg(feature = "server")]
 pub use server::prelude;

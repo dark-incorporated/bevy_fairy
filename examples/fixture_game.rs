@@ -94,7 +94,9 @@ pub fn build_app(port: u16, fps: f64) -> App {
     );
     let mut app = App::new();
     app.add_plugins(
-        MinimalPlugins.set(ScheduleRunnerPlugin::run_loop(Duration::from_secs_f64(1.0 / fps))),
+        MinimalPlugins.set(ScheduleRunnerPlugin::run_loop(Duration::from_secs_f64(
+            1.0 / fps,
+        ))),
     )
     .add_plugins(InputPlugin)
     // Owns the BRP RemotePlugin. Never add a second RemotePlugin next to it.

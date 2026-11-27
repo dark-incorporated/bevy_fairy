@@ -4,7 +4,7 @@
 //! The labels are drawn from a 3x5 bitmap font so the server needs no font file. Only the
 //! glyphs the labels use exist; any other character is refused rather than drawn as a blank.
 
-use image::{imageops, Rgba, RgbaImage};
+use image::{Rgba, RgbaImage, imageops};
 
 /// Cells per row. A sheet of at most 8 cells is therefore at most 2 rows by 4 columns.
 pub const COLUMNS: u32 = 4;
@@ -79,7 +79,10 @@ fn scaled_size(width: u32, height: u32) -> (u32, u32) {
     if width <= CELL_WIDTH {
         return (width, height);
     }
-    (CELL_WIDTH, ((u64::from(height) * u64::from(CELL_WIDTH)).div_ceil(u64::from(width))).max(1) as u32)
+    (
+        CELL_WIDTH,
+        ((u64::from(height) * u64::from(CELL_WIDTH)).div_ceil(u64::from(width))).max(1) as u32,
+    )
 }
 
 /// Lay `cells` out left to right, top to bottom, `COLUMNS` to a row, each under its label.
@@ -88,14 +91,22 @@ fn scaled_size(width: u32, height: u32) -> (u32, u32) {
 /// shaped frames would misalign), and a label with a character outside the font.
 pub fn compose(cells: &[Cell]) -> Result<RgbaImage, String> {
     if cells.is_empty() || cells.len() > MAX_CELLS {
-        return Err(format!("a contact sheet holds 1 to {MAX_CELLS} cells, got {}", cells.len()));
+        return Err(format!(
+            "a contact sheet holds 1 to {MAX_CELLS} cells, got {}",
+            cells.len()
+        ));
     }
     let (w, h) = cells[0].image.dimensions();
     if let Some(bad) = cells.iter().find(|c| c.image.dimensions() != (w, h)) {
         let (bw, bh) = bad.image.dimensions();
-        return Err(format!("frames differ in size ({w}x{h} and {bw}x{bh}); the game was resized mid-burst"));
+        return Err(format!(
+            "frames differ in size ({w}x{h} and {bw}x{bh}); the game was resized mid-burst"
+        ));
     }
-    if let Some(bad) = cells.iter().find_map(|c| c.label.chars().find(|ch| glyph(*ch).is_none())) {
+    if let Some(bad) = cells
+        .iter()
+        .find_map(|c| c.label.chars().find(|ch| glyph(*ch).is_none()))
+    {
         return Err(format!("label character {bad:?} is not in the sheet font"));
     }
     let (cw, ch) = scaled_size(w, h);
@@ -104,10 +115,18 @@ pub fn compose(cells: &[Cell]) -> Result<RgbaImage, String> {
     let (stride_x, stride_y) = (cw, LABEL_H + ch);
     let mut sheet = RgbaImage::from_pixel(columns * stride_x, rows * stride_y, BACKGROUND);
     for (i, cell) in cells.iter().enumerate() {
-        let (x0, y0) = ((i as u32 % COLUMNS) * stride_x, (i as u32 / COLUMNS) * stride_y);
+        let (x0, y0) = (
+            (i as u32 % COLUMNS) * stride_x,
+            (i as u32 / COLUMNS) * stride_y,
+        );
         draw_label(&mut sheet, x0, y0, &cell.label);
         if (cw, ch) == (w, h) {
-            imageops::replace(&mut sheet, &cell.image, i64::from(x0), i64::from(y0 + LABEL_H));
+            imageops::replace(
+                &mut sheet,
+                &cell.image,
+                i64::from(x0),
+                i64::from(y0 + LABEL_H),
+            );
         } else {
             let small = imageops::resize(&cell.image, cw, ch, imageops::FilterType::Triangle);
             imageops::replace(&mut sheet, &small, i64::from(x0), i64::from(y0 + LABEL_H));
@@ -125,18 +144,37 @@ mod tests {
     }
 
     fn cell(rgb: [u8; 3], label: &str) -> Cell {
-        Cell { image: flat(40, 30, rgb), label: label.to_string() }
+        Cell {
+            image: flat(40, 30, rgb),
+            label: label.to_string(),
+        }
     }
 
     #[test]
     fn eight_cells_make_two_rows_of_four_with_each_frame_in_its_own_slot() {
-        let colours = [[10, 0, 0], [20, 0, 0], [30, 0, 0], [40, 0, 0], [50, 0, 0], [60, 0, 0], [70, 0, 0], [80, 0, 0]];
+        let colours = [
+            [10, 0, 0],
+            [20, 0, 0],
+            [30, 0, 0],
+            [40, 0, 0],
+            [50, 0, 0],
+            [60, 0, 0],
+            [70, 0, 0],
+            [80, 0, 0],
+        ];
         let cells: Vec<Cell> = colours.iter().map(|c| cell(*c, "F1")).collect();
         let sheet = compose(&cells).expect("8 equal cells compose");
         assert_eq!(sheet.dimensions(), (4 * 40, 2 * (LABEL_H + 30)));
         for (i, c) in colours.iter().enumerate() {
-            let (x, y) = ((i as u32 % 4) * 40 + 20, (i as u32 / 4) * (LABEL_H + 30) + LABEL_H + 15);
-            assert_eq!(sheet.get_pixel(x, y).0[..3], c[..], "cell {i} holds its own frame");
+            let (x, y) = (
+                (i as u32 % 4) * 40 + 20,
+                (i as u32 / 4) * (LABEL_H + 30) + LABEL_H + 15,
+            );
+            assert_eq!(
+                sheet.get_pixel(x, y).0[..3],
+                c[..],
+                "cell {i} holds its own frame"
+            );
         }
     }
 
@@ -144,14 +182,26 @@ mod tests {
     fn a_label_draws_ink_above_its_frame_and_different_labels_differ() {
         let one = compose(&[cell([0, 0, 90], "F1")]).expect("composes");
         let two = compose(&[cell([0, 0, 90], "F2")]).expect("composes");
-        let ink = |s: &RgbaImage| (0..LABEL_H).flat_map(|y| (0..40).map(move |x| (x, y))).filter(|&(x, y)| *s.get_pixel(x, y) == INK).count();
+        let ink = |s: &RgbaImage| {
+            (0..LABEL_H)
+                .flat_map(|y| (0..40).map(move |x| (x, y)))
+                .filter(|&(x, y)| *s.get_pixel(x, y) == INK)
+                .count()
+        };
         assert!(ink(&one) > 0, "the label strip has white pixels");
-        assert_ne!(one.as_raw(), two.as_raw(), "F1 and F2 are drawn differently");
+        assert_ne!(
+            one.as_raw(),
+            two.as_raw(),
+            "F1 and F2 are drawn differently"
+        );
     }
 
     #[test]
     fn wide_frames_are_scaled_to_the_cell_width() {
-        let wide = Cell { image: flat(1280, 720, [5, 5, 5]), label: "REF F9".into() };
+        let wide = Cell {
+            image: flat(1280, 720, [5, 5, 5]),
+            label: "REF F9".into(),
+        };
         let sheet = compose(&[wide]).expect("composes");
         assert_eq!(sheet.dimensions(), (320, LABEL_H + 180));
     }
@@ -161,8 +211,18 @@ mod tests {
         assert!(compose(&[]).is_err());
         let nine: Vec<Cell> = (0..9).map(|_| cell([0; 3], "F1")).collect();
         assert!(compose(&nine).is_err());
-        let mixed = [cell([0; 3], "F1"), Cell { image: flat(41, 30, [0; 3]), label: "F2".into() }];
+        let mixed = [
+            cell([0; 3], "F1"),
+            Cell {
+                image: flat(41, 30, [0; 3]),
+                label: "F2".into(),
+            },
+        ];
         assert!(compose(&mixed).unwrap_err().contains("differ in size"));
-        assert!(compose(&[cell([0; 3], "frame")]).unwrap_err().contains("not in the sheet font"));
+        assert!(
+            compose(&[cell([0; 3], "frame")])
+                .unwrap_err()
+                .contains("not in the sheet font")
+        );
     }
 }

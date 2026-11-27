@@ -8,7 +8,7 @@
  * crate in the Bevy ecosystem cannot be adopted, and being adoptable is why it is published.
  */
 
-use crate::server::brp::{builtin_methods, BrpRequest, ComponentTypeId, EntityId};
+use crate::server::brp::{BrpRequest, ComponentTypeId, EntityId, builtin_methods};
 use crate::server::error::{Error, ErrorContext, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -227,30 +227,42 @@ impl ComponentRegistry {
     /// Register common Bevy component types
     fn register_common_types(&mut self) {
         let common_types = vec![
-            ("Transform", ComponentTypeMetadata {
-                size_bytes: 48, // 3x Vec3 + Quat
-                is_required: false,
-                schema: None,
-                is_mutable: true,
-            }),
-            ("GlobalTransform", ComponentTypeMetadata {
-                size_bytes: 48,
-                is_required: false,
-                schema: None,
-                is_mutable: false, // Usually computed
-            }),
-            ("Visibility", ComponentTypeMetadata {
-                size_bytes: 1,
-                is_required: false,
-                schema: None,
-                is_mutable: true,
-            }),
-            ("Name", ComponentTypeMetadata {
-                size_bytes: 24, // String with capacity
-                is_required: false,
-                schema: None,
-                is_mutable: true,
-            }),
+            (
+                "Transform",
+                ComponentTypeMetadata {
+                    size_bytes: 48, // 3x Vec3 + Quat
+                    is_required: false,
+                    schema: None,
+                    is_mutable: true,
+                },
+            ),
+            (
+                "GlobalTransform",
+                ComponentTypeMetadata {
+                    size_bytes: 48,
+                    is_required: false,
+                    schema: None,
+                    is_mutable: false, // Usually computed
+                },
+            ),
+            (
+                "Visibility",
+                ComponentTypeMetadata {
+                    size_bytes: 1,
+                    is_required: false,
+                    schema: None,
+                    is_mutable: true,
+                },
+            ),
+            (
+                "Name",
+                ComponentTypeMetadata {
+                    size_bytes: 24, // String with capacity
+                    is_required: false,
+                    schema: None,
+                    is_mutable: true,
+                },
+            ),
         ];
 
         for (type_name, metadata) in common_types {
@@ -373,13 +385,15 @@ impl BrpValidator {
         validate_method_name(&request.method).map_err(Error::Validation)?;
 
         // 1. Basic request size validation
-        self.validate_request_size(request_size_bytes, &context).await?;
+        self.validate_request_size(request_size_bytes, &context)
+            .await?;
 
         // 2. Rate limiting validation
         self.validate_rate_limit(session_id, &context).await?;
 
         // 3. Permission validation
-        self.validate_permissions(request, session_id, &context).await?;
+        self.validate_permissions(request, session_id, &context)
+            .await?;
 
         // 4. Request-specific validation
         self.validate_request_specifics(request, &context).await?;
@@ -467,9 +481,9 @@ impl BrpValidator {
         let required_permission = required_permission_for_method(&request.method);
 
         let sessions = self.user_sessions.read().await;
-        let session = sessions.get(session_id).ok_or_else(|| {
-            Error::Validation("Session not found.".to_string())
-        })?;
+        let session = sessions
+            .get(session_id)
+            .ok_or_else(|| Error::Validation("Session not found.".to_string()))?;
 
         if session.permission_level < required_permission {
             return Err(Error::Validation(format!(
@@ -630,15 +644,15 @@ impl BrpValidator {
         permission_level: PermissionLevel,
     ) -> Result<()> {
         let mut sessions = self.user_sessions.write().await;
-        let session = sessions.entry(session_id.to_string()).or_insert_with(|| {
-            UserSession {
+        let session = sessions
+            .entry(session_id.to_string())
+            .or_insert_with(|| UserSession {
                 session_id: session_id.to_string(),
                 permission_level: PermissionLevel::Read,
                 operations_count: 0,
                 last_operation: Instant::now(),
                 rate_state: RateLimitState::default(),
-            }
-        });
+            });
 
         session.permission_level = permission_level;
         Ok(())
@@ -704,7 +718,9 @@ mod tests {
         let request = request(builtin_methods::BRP_LIST_COMPONENTS_METHOD, None);
 
         // Should pass basic validation
-        let result = validator.validate_request(&request, "test_session", 100).await;
+        let result = validator
+            .validate_request(&request, "test_session", 100)
+            .await;
         assert!(result.is_ok());
     }
 
@@ -714,9 +730,16 @@ mod tests {
         // Fictional legacy name must be rejected
         let request = request("bevy/list_components", None);
 
-        let result = validator.validate_request(&request, "test_session", 100).await;
+        let result = validator
+            .validate_request(&request, "test_session", 100)
+            .await;
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Unknown BRP method"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Unknown BRP method")
+        );
     }
 
     #[tokio::test]
@@ -725,9 +748,16 @@ mod tests {
         let request = request(builtin_methods::BRP_QUERY_METHOD, None);
 
         // Should fail with oversized request
-        let result = validator.validate_request(&request, "test_session", usize::MAX).await;
+        let result = validator
+            .validate_request(&request, "test_session", usize::MAX)
+            .await;
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("exceeds maximum allowed size"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("exceeds maximum allowed size")
+        );
     }
 
     #[tokio::test]
@@ -738,13 +768,30 @@ mod tests {
         let request = request(builtin_methods::BRP_QUERY_METHOD, None);
 
         // First two requests should pass
-        assert!(validator.validate_request(&request, "test_session", 100).await.is_ok());
-        assert!(validator.validate_request(&request, "test_session", 100).await.is_ok());
+        assert!(
+            validator
+                .validate_request(&request, "test_session", 100)
+                .await
+                .is_ok()
+        );
+        assert!(
+            validator
+                .validate_request(&request, "test_session", 100)
+                .await
+                .is_ok()
+        );
 
         // Third request should fail
-        let result = validator.validate_request(&request, "test_session", 100).await;
+        let result = validator
+            .validate_request(&request, "test_session", 100)
+            .await;
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Rate limit exceeded"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Rate limit exceeded")
+        );
     }
 
     #[tokio::test]
@@ -765,19 +812,34 @@ mod tests {
         let validator = BrpValidator::new();
 
         // Set up a read-only session
-        validator.update_session_permissions("readonly_session", PermissionLevel::Read).await.unwrap();
+        validator
+            .update_session_permissions("readonly_session", PermissionLevel::Read)
+            .await
+            .unwrap();
 
         // Read operation should pass
         let read_request = request(builtin_methods::BRP_QUERY_METHOD, None);
-        assert!(validator.validate_request(&read_request, "readonly_session", 100).await.is_ok());
+        assert!(
+            validator
+                .validate_request(&read_request, "readonly_session", 100)
+                .await
+                .is_ok()
+        );
 
         // Write operation should fail
         let write_request = request(
             builtin_methods::BRP_DESPAWN_COMPONENTS_METHOD,
             Some(json!({ "entity": 123 })),
         );
-        let result = validator.validate_request(&write_request, "readonly_session", 100).await;
+        let result = validator
+            .validate_request(&write_request, "readonly_session", 100)
+            .await;
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Insufficient permissions"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Insufficient permissions")
+        );
     }
 }

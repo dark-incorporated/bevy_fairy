@@ -8,10 +8,10 @@
  * crate in the Bevy ecosystem cannot be adopted, and being adoptable is why it is published.
  */
 
+use is_terminal::IsTerminal;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::info;
-use is_terminal::IsTerminal;
 
 // Modules are defined in lib.rs, no need to redeclare them here
 
@@ -19,7 +19,6 @@ use bevy_fairy::server::brp_client::BrpClient;
 use bevy_fairy::server::config::Config;
 use bevy_fairy::server::error::Result;
 use bevy_fairy::server::mcp_server_v2;
-
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -32,17 +31,22 @@ async fn main() -> Result<()> {
         } else {
             "Unknown panic payload".to_string()
         };
-        
+
         let location = if let Some(location) = panic_info.location() {
-            format!("{}:{}:{}", location.file(), location.line(), location.column())
+            format!(
+                "{}:{}:{}",
+                location.file(),
+                location.line(),
+                location.column()
+            )
         } else {
             "Unknown location".to_string()
         };
-        
+
         eprintln!("FATAL PANIC in bevy-fairy: {} at {}", payload, location);
         eprintln!("This indicates a critical bug that should be reported.");
         eprintln!("Stack trace should appear above this message.");
-        
+
         // Ensure logs are flushed
         std::io::Write::flush(&mut std::io::stderr()).unwrap_or(());
     }));
@@ -86,7 +90,7 @@ async fn main() -> Result<()> {
         println!("  RUST_LOG             Logging level (default: info)");
         return Ok(());
     }
-    
+
     // stdout is the MCP stream: logs go to stderr, uncoloured.
     tracing_subscriber::fmt()
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
@@ -99,11 +103,18 @@ async fn main() -> Result<()> {
     // stdio is the only transport. A person at a terminal gets a usage error instead of a
     // server waiting on a keyboard for JSON-RPC; an MCP client (piped stdin), `--stdio`, a
     // legacy alias or `MCP_TRANSPORT=stdio` starts it.
-    let explicit = args.iter().skip(1).any(|arg| arg == "--stdio" || LEGACY_STDIO_ALIASES.contains(&arg.as_str()))
-        || std::env::var("MCP_TRANSPORT").map(|t| t == "stdio").unwrap_or(false);
+    let explicit = args
+        .iter()
+        .skip(1)
+        .any(|arg| arg == "--stdio" || LEGACY_STDIO_ALIASES.contains(&arg.as_str()))
+        || std::env::var("MCP_TRANSPORT")
+            .map(|t| t == "stdio")
+            .unwrap_or(false);
     if !explicit && std::io::stdin().is_terminal() {
         eprintln!("bevy-fairy speaks MCP over stdio and was started from a terminal.");
-        eprintln!("Register it in an MCP client as `bevy-fairy --stdio`, or pass --stdio to run it by hand.");
+        eprintln!(
+            "Register it in an MCP client as `bevy-fairy --stdio`, or pass --stdio to run it by hand."
+        );
         std::process::exit(2);
     }
 
@@ -117,7 +128,7 @@ async fn run_stdio_mode(config: Config) -> Result<()> {
         let client = brp_client.read().await;
         client.init().await?;
     }
-    
+
     let server = mcp_server_v2::McpServerV2::new(config, brp_client)?;
     server.run_stdio().await
 }

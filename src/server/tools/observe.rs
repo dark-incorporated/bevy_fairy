@@ -1,13 +1,12 @@
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::RwLock;
 use tracing::{error, info, warn};
 
-use crate::server::brp_client::{certainly_another_game, BrpClient, GameName, Unnamed};
+use crate::server::brp_client::{BrpClient, GameName, Unnamed, certainly_another_game};
 use crate::server::brp_messages::{
-    entity_data_from_query_result, BrpPayload, BrpRequest,
-    EntityData,
+    BrpPayload, BrpRequest, EntityData, entity_data_from_query_result,
 };
 use crate::server::error::Result;
 use crate::server::mcp_tools::ObserveRequest;
@@ -47,7 +46,10 @@ impl ObserveState {
             diff_engine: StateDiff::new(),
             last_snapshot: None,
             last_query: None,
-            last_game: Err(Unnamed { why: "no read yet".to_string(), answered_without_a_name: false }),
+            last_game: Err(Unnamed {
+                why: "no read yet".to_string(),
+                answered_without_a_name: false,
+            }),
         })
     }
 
@@ -83,7 +85,10 @@ impl ObserveState {
             (Ok(_), Ok(_)) => None,
             (Err(Unnamed { why, .. }), _) | (_, Err(Unnamed { why, .. })) => Some(why.clone()),
         };
-        Baseline::Earlier(Box::new(self.diff_engine.diff_snapshots(last, current_snapshot)), unverified)
+        Baseline::Earlier(
+            Box::new(self.diff_engine.diff_snapshots(last, current_snapshot)),
+            unverified,
+        )
     }
 
     /// Number `entities` as the diff engine's next snapshot, without keeping it
@@ -108,9 +113,11 @@ static OBSERVE_STATE: std::sync::OnceLock<Arc<RwLock<ObserveState>>> = std::sync
 
 fn get_observe_state() -> Arc<RwLock<ObserveState>> {
     OBSERVE_STATE
-        .get_or_init(|| Arc::new(RwLock::new(
-            ObserveState::new().expect("Default observe state should initialize successfully")
-        )))
+        .get_or_init(|| {
+            Arc::new(RwLock::new(
+                ObserveState::new().expect("Default observe state should initialize successfully"),
+            ))
+        })
         .clone()
 }
 
@@ -122,7 +129,10 @@ pub async fn handle(request: &ObserveRequest, brp_client: Arc<RwLock<BrpClient>>
     let query = request.query.as_str();
     let diff_mode = request.diff;
 
-    info!("Processing observe query: {} (diff_mode: {})", query, diff_mode);
+    info!(
+        "Processing observe query: {} (diff_mode: {})",
+        query, diff_mode
+    );
 
     let start_time = Instant::now();
     let state = get_observe_state();
@@ -276,7 +286,9 @@ pub async fn handle(request: &ObserveRequest, brp_client: Arc<RwLock<BrpClient>>
                 }
                 _ => None,
             };
-            let returned = matched.map_or(decoded_entities.len(), |(limit, _)| decoded_entities.len().min(limit));
+            let returned = matched.map_or(decoded_entities.len(), |(limit, _)| {
+                decoded_entities.len().min(limit)
+            });
             let count = count_of(&value, returned);
 
             // Compare with the previous `diff` read of the same query first, then keep this read as
@@ -286,7 +298,8 @@ pub async fn handle(request: &ObserveRequest, brp_client: Arc<RwLock<BrpClient>>
                 let game = brp_client.write().await.game_instance().await;
                 let mut state_guard = state.write().await;
                 let current_snapshot = state_guard.create_snapshot(decoded_entities);
-                let baseline = state_guard.diff_against_last_read_of(query, &current_snapshot, &game);
+                let baseline =
+                    state_guard.diff_against_last_read_of(query, &current_snapshot, &game);
                 state_guard.add_snapshot(query, current_snapshot, game);
                 baseline
             } else {
@@ -397,7 +410,10 @@ fn count_of(value: &Value, decoded_entities: usize) -> (&'static str, usize) {
 
 /// The component names a request's `filter` mentions, `with` first then `without`.
 fn filter_names(request: &BrpRequest) -> Vec<String> {
-    let filter = request.params.as_ref().and_then(|params| params.get("filter"));
+    let filter = request
+        .params
+        .as_ref()
+        .and_then(|params| params.get("filter"));
     ["with", "without"]
         .iter()
         .filter_map(|key| filter?.get(*key)?.as_array())
@@ -439,7 +455,9 @@ fn drop_not_present_errors(value: &mut Value) {
 }
 
 /// Every component type path the game has registered.
-async fn registered_components(brp_client: &Arc<RwLock<BrpClient>>) -> std::result::Result<Vec<String>, String> {
+async fn registered_components(
+    brp_client: &Arc<RwLock<BrpClient>>,
+) -> std::result::Result<Vec<String>, String> {
     let request = crate::server::query_parser::make_list_components_request();
     let response = brp_client
         .write()
@@ -448,9 +466,10 @@ async fn registered_components(brp_client: &Arc<RwLock<BrpClient>>) -> std::resu
         .await
         .map_err(|e| e.to_string())?;
     match response.payload {
-        BrpPayload::Result(Value::Array(names)) => {
-            Ok(names.iter().filter_map(|n| n.as_str().map(String::from)).collect())
-        }
+        BrpPayload::Result(Value::Array(names)) => Ok(names
+            .iter()
+            .filter_map(|n| n.as_str().map(String::from))
+            .collect()),
         BrpPayload::Result(other) => Err(format!("world.list_components answered {other}")),
         BrpPayload::Error(error) => Err(error.message),
     }
@@ -467,11 +486,16 @@ mod tests {
             bevy_brp_host: "localhost".to_string(),
             bevy_brp_port: 15702,
             mcp_port: 3000,
-        ..Default::default()
+            ..Default::default()
         };
-        let brp_client = Arc::new(RwLock::new(crate::server::brp_client::BrpClient::new(&config)));
+        let brp_client = Arc::new(RwLock::new(crate::server::brp_client::BrpClient::new(
+            &config,
+        )));
 
-        let request = ObserveRequest { query: "list all entities".to_string(), diff: false };
+        let request = ObserveRequest {
+            query: "list all entities".to_string(),
+            diff: false,
+        };
         let result = handle(&request, brp_client).await.unwrap();
 
         // Should return error since BRP client is not connected
@@ -484,11 +508,16 @@ mod tests {
             bevy_brp_host: "localhost".to_string(),
             bevy_brp_port: 15702,
             mcp_port: 3000,
-        ..Default::default()
+            ..Default::default()
         };
-        let brp_client = Arc::new(RwLock::new(crate::server::brp_client::BrpClient::new(&config)));
+        let brp_client = Arc::new(RwLock::new(crate::server::brp_client::BrpClient::new(
+            &config,
+        )));
 
-        let request = ObserveRequest { query: "invalid query syntax".to_string(), diff: false };
+        let request = ObserveRequest {
+            query: "invalid query syntax".to_string(),
+            diff: false,
+        };
         let result = handle(&request, brp_client).await.unwrap();
 
         assert_eq!(result.get("error").unwrap(), "Query parsing failed");
@@ -516,8 +545,14 @@ mod tests {
 
     #[test]
     fn a_short_name_is_matched_to_the_registered_path_it_ends() {
-        let registered = vec!["bevy_ecs::name::Name".to_string(), "fixture_game::Crate".to_string()];
-        assert_eq!(registered_paths_ending_with("Crate", &registered), vec!["fixture_game::Crate"]);
+        let registered = vec![
+            "bevy_ecs::name::Name".to_string(),
+            "fixture_game::Crate".to_string(),
+        ];
+        assert_eq!(
+            registered_paths_ending_with("Crate", &registered),
+            vec!["fixture_game::Crate"]
+        );
         assert!(registered_paths_ending_with("Cr", &registered).is_empty());
     }
 }
