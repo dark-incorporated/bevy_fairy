@@ -95,7 +95,7 @@ pub use time::ClockRequest;
 #[cfg(feature = "plugin-guide")]
 pub use guide::{
     BEAT_SECONDS, Checkpoints, Guide, GuideOverlay, GuideOverlayPlugin, GuideParams,
-    GuidePlacement, Step, StepRecord, evaluate_checkpoint, handle_guide, watch_guide,
+    GuidePlacement, GuidePlugin, Step, StepRecord, evaluate_checkpoint, handle_guide, watch_guide,
 };
 #[cfg(feature = "plugin-screenshot")]
 pub use screenshot::{
@@ -184,13 +184,15 @@ impl Plugin for DebuggerPlugin {
             scene::start_playback(app, &path);
         }
 
+        // The guide's state and its one evaluator belong to `GuidePlugin`. A host that added it
+        // itself (it uses the guide where there is no transport too) keeps that copy.
         #[cfg(feature = "plugin-guide")]
-        app.add_plugins(guide::GuideOverlayPlugin)
-            .init_resource::<guide::Guide>()
-            .init_resource::<guide::Checkpoints>()
-            // After the host's frame, so a checkpoint reads the state this frame ended with, and
-            // ahead of `RemoteLast`, where the watch stream reports what this recorded.
-            .add_systems(Last, guide::evaluate_checkpoint);
+        {
+            if !app.is_plugin_added::<guide::GuidePlugin>() {
+                app.add_plugins(guide::GuidePlugin);
+            }
+            app.add_plugins(guide::GuideOverlayPlugin);
+        }
 
         // Injected keys and clicks are written as messages. `apply_pending_input` runs
         // before `InputSystems`, which folds those messages into `ButtonInput`.

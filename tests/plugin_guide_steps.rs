@@ -33,7 +33,7 @@
 use bevy::ecs::system::RunSystemOnce;
 use bevy::prelude::*;
 use bevy_fairy::{
-    BEAT_SECONDS, Checkpoints, DebuggerPlugin, Guide, GuideOverlayPlugin, Step,
+    BEAT_SECONDS, Checkpoints, DebuggerPlugin, Guide, GuideOverlayPlugin, GuidePlugin, Step,
     evaluate_checkpoint, handle_guide, watch_guide,
 };
 use serde_json::{Value, json};
@@ -844,4 +844,86 @@ fn the_card_says_when_a_step_is_waiting_on_the_person() {
         !lines.contains("yours to judge"),
         "this one is watched, so saying otherwise would be a lie every third step: {lines}"
     );
+}
+
+// ── the guide without the transport ─────────────────────────────────────────────────────────────
+
+/// How often a checkpoint was asked. The `counted` checkpoint never passes, so every frame asks it.
+#[derive(Resource, Default)]
+struct Asked(u32);
+
+fn register_counted(app: &mut App) {
+    let id = app.register_system(|_: In<Value>, mut asked: ResMut<Asked>| {
+        asked.0 += 1;
+        false
+    });
+    app.world_mut()
+        .resource_mut::<Checkpoints>()
+        .register("counted", id);
+}
+
+fn current_label(app: &App) -> Option<String> {
+    app.world()
+        .resource::<Guide>()
+        .current()
+        .map(|step| step.label.clone())
+}
+
+/// **`GuidePlugin` alone is a guide whose steps advance**: no `DebuggerPlugin`, no transport. A host
+/// that cannot bind a port (a test harness that builds several apps) used to get `Guide` and
+/// `Checkpoints` and no evaluator, because only `DebuggerPlugin` scheduled one, and its steps never
+/// moved (`bevy_dark_factory#663`: the headless first-map tour sat on step one).
+#[test]
+fn guide_plugin_alone_advances_a_step_when_its_checkpoint_passes() {
+    let mut app = App::new();
+    app.add_plugins((MinimalPlugins, GuidePlugin))
+        .init_resource::<Ready>();
+    register_ready(&mut app);
+    post(&mut app, script(json!("ready")));
+    app.update();
+    assert_eq!(
+        current_label(&app).as_deref(),
+        Some("drop a floor"),
+        "the condition is false, so the step waits"
+    );
+
+    app.world_mut().resource_mut::<Ready>().0 = true;
+    app.update();
+    assert_eq!(
+        current_label(&app).as_deref(),
+        Some("save it"),
+        "the condition arrived, so the frame that saw it advanced the step"
+    );
+}
+
+/// **One evaluator, whoever brought the guide.** `DebuggerPlugin` adds `GuidePlugin` only when the
+/// host has not, so a host that added it first and `DebuggerPlugin` alone both ask the checkpoint
+/// once a frame. A second copy of the system would ask twice, and could pass two steps in one frame.
+#[test]
+fn the_checkpoint_is_asked_once_a_frame_whoever_added_the_guide() {
+    for host_added_the_guide in [false, true] {
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, bevy::input::InputPlugin));
+        if host_added_the_guide {
+            app.add_plugins(GuidePlugin);
+        }
+        app.add_plugins(DebuggerPlugin::default())
+            .init_resource::<Asked>();
+        register_counted(&mut app);
+        app.update();
+        post(
+            &mut app,
+            json!({"steps": [{"label": "count", "checkpoint": "counted"}]}),
+        );
+        let before = app.world().resource::<Asked>().0;
+        for _ in 0..3 {
+            app.update();
+        }
+        assert_eq!(
+            app.world().resource::<Asked>().0 - before,
+            3,
+            "three frames ask the checkpoint three times (host added GuidePlugin first: \
+             {host_added_the_guide})"
+        );
+    }
 }

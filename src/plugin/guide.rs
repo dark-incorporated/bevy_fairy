@@ -527,8 +527,8 @@ pub fn handle_guide(
 }
 
 /// Runs the current step's checkpoint, once per frame while a step with one is current, and advances
-/// the step when it passes. Registered by [`crate::DebuggerPlugin`] in `Last`, so it sees the frame's
-/// finished state and runs ahead of the BRP handlers in `RemoteLast`.
+/// the step when it passes. Scheduled in `Last` by [`GuidePlugin`] and nothing else, so it sees the
+/// frame's finished state and runs ahead of the BRP handlers in `RemoteLast`.
 ///
 /// **This is the one place a checkpoint is evaluated.** It is a plain system that queues the
 /// exclusive work only when a step with a checkpoint is current, so an app with no script (the
@@ -617,8 +617,7 @@ pub fn watch_guide(In(_params): In<Option<Value>>, world: &mut World) -> BrpResu
     let Some(mut guide) = world.get_resource_mut::<Guide>() else {
         return Err(BrpError {
             code: error_codes::INTERNAL_ERROR,
-            message: "no Guide resource; add DebuggerPlugin or init_resource::<Guide>()"
-                .to_string(),
+            message: "no Guide resource; add GuidePlugin (DebuggerPlugin adds it)".to_string(),
             data: None,
         });
     };
@@ -936,5 +935,31 @@ impl Plugin for GuideOverlayPlugin {
             .init_resource::<GuidePlacement>()
             .add_systems(Startup, spawn_guide_overlay)
             .add_systems(Update, (tick_guide, paint_guide).chain());
+    }
+}
+
+/// **The guide itself, without the transport or the card**: the script ([`Guide`]), the host's
+/// conditions ([`Checkpoints`]) and the one system that evaluates a step's checkpoint,
+/// [`evaluate_checkpoint`], in `Last`.
+///
+/// **The only place that system is scheduled.** [`crate::DebuggerPlugin`] adds this plugin when the
+/// host has not, so a host with the transport needs nothing more, and a host that uses the guide
+/// without it (a test harness that cannot bind a port, a host with its own BRP) adds this one plugin
+/// and its steps advance. Before it existed the system was scheduled by `DebuggerPlugin` alone, so
+/// such a host had a guide whose steps never moved: `bevy_dark_factory`'s headless tour sat on step
+/// one once `watch_guide` stopped evaluating (B-127).
+///
+/// Unique, like every Bevy plugin by default: whoever adds it second must check
+/// `is_plugin_added::<GuidePlugin>()` first, as `DebuggerPlugin` does, because a second copy of
+/// the system would evaluate a step twice in one frame and could pass two steps at once.
+pub struct GuidePlugin;
+
+impl Plugin for GuidePlugin {
+    fn build(&self, app: &mut App) {
+        app.init_resource::<Guide>()
+            .init_resource::<Checkpoints>()
+            // After the host's frame, so a checkpoint reads the state this frame ended with, and
+            // ahead of `RemoteLast`, where the watch stream reports what this recorded.
+            .add_systems(Last, evaluate_checkpoint);
     }
 }
