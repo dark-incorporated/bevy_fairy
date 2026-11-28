@@ -337,3 +337,7 @@ required-features = ["plugin-screenshot"]
 [[test]]
 name = "fixture_ground_truth"
 required-features = ["server", "plugin"]
+
+# Debuginfo off in dev builds (rust-speed-audit 2026-11-28, measured on bevy_carnage: cold build 100 -> 77 s, target dir 3.7 -> 1.5 GB; CI already builds this way through CARGO_PROFILE_DEV_DEBUG=0).
+[profile.dev]
+debug = 0
