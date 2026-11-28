@@ -70,23 +70,23 @@ impl EntityInspector {
         let start_time = Instant::now();
 
         // Check cache first
-        if let Some(cached) = self.get_cached_entity(entity_id).await {
-            if !cached.ttl_expired() {
-                debug!("Using cached data for entity {}", entity_id);
-                return Ok(DebugResponse::EntityInspection {
-                    entity: cached.entity,
-                    metadata: if include_metadata {
-                        Some(cached.metadata)
-                    } else {
-                        None
-                    },
-                    relationships: if include_relationships {
-                        cached.relationships
-                    } else {
-                        None
-                    },
-                });
-            }
+        if let Some(cached) = self.get_cached_entity(entity_id).await
+            && !cached.ttl_expired()
+        {
+            debug!("Using cached data for entity {}", entity_id);
+            return Ok(DebugResponse::EntityInspection {
+                entity: cached.entity,
+                metadata: if include_metadata {
+                    Some(cached.metadata)
+                } else {
+                    None
+                },
+                relationships: if include_relationships {
+                    cached.relationships
+                } else {
+                    None
+                },
+            });
         }
 
         // Fetch entity data from Bevy via BRP
@@ -346,10 +346,9 @@ impl EntityInspector {
         if let Some(parent_value) = entity_data
             .components
             .get("bevy_hierarchy::components::parent::Parent")
+            && let Ok(parent_id) = self.extract_entity_id_from_component(parent_value)
         {
-            if let Ok(parent_id) = self.extract_entity_id_from_component(parent_value) {
-                parent = Some(parent_id);
-            }
+            parent = Some(parent_id);
         }
 
         // Look for Children component
@@ -364,12 +363,11 @@ impl EntityInspector {
 
         // Look for other relationship components (Transform, GlobalTransform, etc.)
         for (component_type, component_value) in &entity_data.components {
-            if self.is_relationship_component(component_type) {
-                if let Ok(entity_ids) = self.extract_entity_ids_from_component(component_value) {
-                    if !entity_ids.is_empty() {
-                        related.insert(component_type.clone(), entity_ids);
-                    }
-                }
+            if self.is_relationship_component(component_type)
+                && let Ok(entity_ids) = self.extract_entity_ids_from_component(component_value)
+                && !entity_ids.is_empty()
+            {
+                related.insert(component_type.clone(), entity_ids);
             }
         }
 
@@ -448,10 +446,10 @@ impl EntityInspector {
     /// Check if a component has been modified recently
     async fn is_component_modified(&self, entity_id: EntityId, component_type: &str) -> bool {
         let tracker = self.change_tracker.read().await;
-        if let Some(entity_mods) = tracker.modifications.get(&entity_id) {
-            if let Some(&last_modified) = entity_mods.get(component_type) {
-                return tracker.current_frame - last_modified <= 60; // Modified within last 60 frames
-            }
+        if let Some(entity_mods) = tracker.modifications.get(&entity_id)
+            && let Some(&last_modified) = entity_mods.get(component_type)
+        {
+            return tracker.current_frame - last_modified <= 60; // Modified within last 60 frames
         }
         false
     }
@@ -583,10 +581,10 @@ impl EntityInspector {
             Value::Object(obj) => {
                 // Look for common entity ID field names
                 for field_name in &["entity", "id", "Entity", "target"] {
-                    if let Some(Value::Number(n)) = obj.get(*field_name) {
-                        if let Some(id) = n.as_u64() {
-                            return Ok(id);
-                        }
+                    if let Some(Value::Number(n)) = obj.get(*field_name)
+                        && let Some(id) = n.as_u64()
+                    {
+                        return Ok(id);
                     }
                 }
                 Err(Error::DebugError(
@@ -727,7 +725,7 @@ mod tests {
         config.bevy_brp_port = 15702;
         config.mcp_port = 3000;
         let brp_client = Arc::new(RwLock::new(BrpClient::new(&config)));
-        let inspector = EntityInspector::new(brp_client);
+        let _inspector = EntityInspector::new(brp_client);
 
         let cached = CachedEntityData {
             entity: EntityData {

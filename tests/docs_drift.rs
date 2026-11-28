@@ -460,13 +460,13 @@ fn registered_tools() -> std::collections::BTreeMap<String, std::collections::BT
         if let Some(name) = line.strip_prefix("## `").and_then(|r| r.strip_suffix('`')) {
             tools.insert(name.to_string(), std::collections::BTreeSet::new());
             current = Some(name.to_string());
-        } else if let (Some(tool), Some(row)) = (&current, line.strip_prefix("| `")) {
-            if let Some(arg) = row.split('`').next() {
-                tools
-                    .get_mut(tool)
-                    .expect("tool is registered")
-                    .insert(arg.to_string());
-            }
+        } else if let (Some(tool), Some(row)) = (&current, line.strip_prefix("| `"))
+            && let Some(arg) = row.split('`').next()
+        {
+            tools
+                .get_mut(tool)
+                .expect("tool is registered")
+                .insert(arg.to_string());
         }
     }
     tools

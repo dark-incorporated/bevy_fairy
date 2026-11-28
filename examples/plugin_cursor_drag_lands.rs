@@ -47,11 +47,11 @@ fn box_select(
     } else if mouse.pressed(MouseButton::Left) {
         marquee.to = Some(at);
         println!("  drag    to {at:?}");
-    } else if mouse.just_released(MouseButton::Left) {
-        if let (Some(from), Some(_)) = (marquee.from, marquee.to) {
-            marquee.committed = Some((from, at));
-            println!("  release at {at:?}   <- the box is {from:?} .. {at:?}");
-        }
+    } else if mouse.just_released(MouseButton::Left)
+        && let (Some(from), Some(_)) = (marquee.from, marquee.to)
+    {
+        marquee.committed = Some((from, at));
+        println!("  release at {at:?}   <- the box is {from:?} .. {at:?}");
     }
 }
 

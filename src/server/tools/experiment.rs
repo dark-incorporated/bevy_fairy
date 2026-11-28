@@ -358,13 +358,12 @@ async fn handle_history(brp_client: Arc<RwLock<BrpClient>>) -> Result<Value> {
     });
     if let (Standing::Unconfirmed(why) | Standing::Unverified(why), Some(fields)) =
         (&standing, reply.as_object_mut())
+        && state_guard.executor.entry_count() > 0
     {
-        if state_guard.executor.entry_count() > 0 {
-            fields.insert(
-                "game_instance_unverified".to_string(),
-                Value::from(why.as_str()),
-            );
-        }
+        fields.insert(
+            "game_instance_unverified".to_string(),
+            Value::from(why.as_str()),
+        );
     }
     Ok(reply)
 }

@@ -155,12 +155,12 @@ fn handle_time(
     mut state: ResMut<ClockState>,
     mut clock: ResMut<Time<Virtual>>,
 ) -> Result<Value, String> {
-    if let Some(speed) = params.speed {
-        if !speed.is_finite() || speed <= 0.0 || speed > MAX_SPEED {
-            return Err(format!(
-                "speed must be > 0 and at most {MAX_SPEED}, got {speed}. Time<Virtual> overflows past that, and the engine caps a frame at its max_delta anyway. Example: {{\"speed\": 4.0}}"
-            ));
-        }
+    if let Some(speed) = params.speed
+        && (!speed.is_finite() || speed <= 0.0 || speed > MAX_SPEED)
+    {
+        return Err(format!(
+            "speed must be > 0 and at most {MAX_SPEED}, got {speed}. Time<Virtual> overflows past that, and the engine caps a frame at its max_delta anyway. Example: {{\"speed\": 4.0}}"
+        ));
     }
     if let Some(speed) = params.speed {
         request.speed = speed;

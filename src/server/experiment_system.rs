@@ -310,13 +310,12 @@ impl ActionExecutor {
             // Add to history if successful and not in a transaction. A batch is not an entry: it
             // has no reverse of its own, and an entry `undo` cannot step past would block every
             // earlier one. The batch's actions are recorded instead (see `record_committed`).
-            if let Ok(action_result) = &result {
-                if action_result.success
-                    && self.transaction_stack.is_empty()
-                    && !matches!(action, Action::Batch { .. })
-                {
-                    self.add_to_history(action.clone(), action_result.clone());
-                }
+            if let Ok(action_result) = &result
+                && action_result.success
+                && self.transaction_stack.is_empty()
+                && !matches!(action, Action::Batch { .. })
+            {
+                self.add_to_history(action.clone(), action_result.clone());
             }
 
             result
@@ -463,13 +462,13 @@ impl ActionExecutor {
                     );
 
                     // Only claim a reverse when every component this set had an original value.
-                    if let Some(originals) = original_values {
-                        if originals.len() == components.len() {
-                            result.reverse = Some(Action::Modify {
-                                entity_id,
-                                components: originals,
-                            });
-                        }
+                    if let Some(originals) = original_values
+                        && originals.len() == components.len()
+                    {
+                        result.reverse = Some(Action::Modify {
+                            entity_id,
+                            components: originals,
+                        });
                     }
 
                     // The game's answer to the write is "accepted". What it holds a frame later

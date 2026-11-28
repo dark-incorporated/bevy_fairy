@@ -745,11 +745,11 @@ impl AnomalyDetectionSystem {
         while let Some(entities) = receiver.recv().await {
             match self.detect_anomalies(&entities) {
                 Ok(anomalies) => {
-                    if !anomalies.is_empty() {
-                        if let Err(e) = anomaly_sender.send(anomalies).await {
-                            warn!("Failed to send anomalies: {}", e);
-                            break;
-                        }
+                    if !anomalies.is_empty()
+                        && let Err(e) = anomaly_sender.send(anomalies).await
+                    {
+                        warn!("Failed to send anomalies: {}", e);
+                        break;
                     }
                 }
                 Err(e) => {

@@ -89,14 +89,12 @@ async fn wait_until_ready(tools: &BevyDebuggerTools) -> Value {
             .await
             .expect("status returns a result");
         let text = text_of(&result);
-        if result.is_error != Some(true) {
-            if let Ok(status) = serde_json::from_str::<Value>(&text) {
-                if status.get("ready") == Some(&json!(true))
-                    && status.get("frame").and_then(Value::as_u64).unwrap_or(0) > 0
-                {
-                    return status;
-                }
-            }
+        if result.is_error != Some(true)
+            && let Ok(status) = serde_json::from_str::<Value>(&text)
+            && status.get("ready") == Some(&json!(true))
+            && status.get("frame").and_then(Value::as_u64).unwrap_or(0) > 0
+        {
+            return status;
         }
         assert!(
             Instant::now() < deadline,
@@ -2955,10 +2953,10 @@ impl StdioServer {
                 .lines()
                 .map_while(Result::ok)
             {
-                if let Ok(message) = serde_json::from_str::<Value>(&line) {
-                    if send.send(message).is_err() {
-                        break;
-                    }
+                if let Ok(message) = serde_json::from_str::<Value>(&line)
+                    && send.send(message).is_err()
+                {
+                    break;
                 }
             }
         });

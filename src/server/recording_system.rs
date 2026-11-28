@@ -608,22 +608,22 @@ impl Timeline {
 
     /// Seek to a specific frame
     pub fn seek(&mut self, frame_number: usize) -> bool {
-        if let Some(recording) = &self.recording {
-            if frame_number < recording.total_frames {
-                self.current_frame = frame_number;
-                return true;
-            }
+        if let Some(recording) = &self.recording
+            && frame_number < recording.total_frames
+        {
+            self.current_frame = frame_number;
+            return true;
         }
         false
     }
 
     /// Seek to a marker
     pub fn seek_to_marker(&mut self, marker_name: &str) -> bool {
-        if let Some(recording) = &self.recording {
-            if let Some(marker) = recording.markers.iter().find(|m| m.name == marker_name) {
-                self.current_frame = marker.frame_number;
-                return true;
-            }
+        if let Some(recording) = &self.recording
+            && let Some(marker) = recording.markers.iter().find(|m| m.name == marker_name)
+        {
+            self.current_frame = marker.frame_number;
+            return true;
         }
         false
     }
@@ -635,11 +635,11 @@ impl Timeline {
 
     /// Move to next frame
     pub fn next(&mut self) -> Option<Frame> {
-        if let Some(recording) = &self.recording {
-            if self.current_frame + 1 < recording.total_frames {
-                self.current_frame += 1;
-                return self.current();
-            }
+        if let Some(recording) = &self.recording
+            && self.current_frame + 1 < recording.total_frames
+        {
+            self.current_frame += 1;
+            return self.current();
         }
         None
     }

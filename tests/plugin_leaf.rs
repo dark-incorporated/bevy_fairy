@@ -327,6 +327,8 @@ fn the_plugin_closure_contains_nothing_that_can_synthesise_an_event() {
 /// `depth` is the tree's depth; `None` means the whole closure.
 fn cargo_tree_for_the_plugin(depth: Option<usize>) -> String {
     let depth_arg = depth.map(|d| d.to_string());
+    // `--color never`: CI sets CARGO_TERM_COLOR=always, which wraps the tree glyphs in ANSI
+    // escapes, and the first token of a line was then `\e[2m├──\e[0m`, not a crate name.
     let mut args = vec![
         "tree".to_string(),
         "--no-default-features".to_string(),
@@ -334,6 +336,8 @@ fn cargo_tree_for_the_plugin(depth: Option<usize>) -> String {
         "plugin".to_string(),
         "--edges".to_string(),
         "normal".to_string(),
+        "--color".to_string(),
+        "never".to_string(),
     ];
     if let Some(depth) = depth_arg {
         args.push("--depth".to_string());

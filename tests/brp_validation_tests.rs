@@ -12,7 +12,6 @@ use bevy_fairy::server::brp_messages::{BrpRequest, builtin_methods};
 use bevy_fairy::server::brp_validation::{
     BrpValidator, ComponentRegistry, EntityTracker, PermissionLevel, ValidationConfig,
 };
-use std::collections::HashMap;
 use tokio::time::{Duration, sleep};
 
 /// Helper: build a `BrpRequest` envelope for a method.
@@ -486,7 +485,7 @@ async fn test_session_management() {
 
 #[tokio::test]
 async fn test_error_message_quality() {
-    let validator = BrpValidator::new();
+    let _validator = BrpValidator::new();
     let session_id = "error_test_session";
 
     // Test rate limit error message

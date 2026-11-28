@@ -458,12 +458,11 @@ impl TypeRegistryManager {
         }
 
         // Category matching
-        if let Some(category) = &query.category {
-            if std::mem::discriminant(&cached_info.metadata.type_category)
+        if let Some(category) = &query.category
+            && std::mem::discriminant(&cached_info.metadata.type_category)
                 == std::mem::discriminant(category)
-            {
-                score += 0.5;
-            }
+        {
+            score += 0.5;
         }
 
         // Reflection requirement
@@ -519,12 +518,11 @@ impl TypeRegistryManager {
             }
         }
 
-        if let Some(category) = &query.category {
-            if std::mem::discriminant(&cached_info.metadata.type_category)
+        if let Some(category) = &query.category
+            && std::mem::discriminant(&cached_info.metadata.type_category)
                 == std::mem::discriminant(category)
-            {
-                reasons.push(format!("Type category matches: {:?}", category));
-            }
+        {
+            reasons.push(format!("Type category matches: {:?}", category));
         }
 
         if cached_info.metadata.is_reflected {
@@ -643,15 +641,15 @@ pub mod type_path_utils {
 
     /// Extract generic parameters from a type path
     pub fn extract_generic_params(type_path: &str) -> Vec<String> {
-        if let Some(start) = type_path.find('<') {
-            if let Some(end) = type_path.rfind('>') {
-                let params_str = &type_path[start + 1..end];
-                return params_str
-                    .split(',')
-                    .map(|s| s.trim().to_string())
-                    .filter(|s| !s.is_empty())
-                    .collect();
-            }
+        if let Some(start) = type_path.find('<')
+            && let Some(end) = type_path.rfind('>')
+        {
+            let params_str = &type_path[start + 1..end];
+            return params_str
+                .split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect();
         }
         Vec::new()
     }

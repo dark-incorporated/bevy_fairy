@@ -31,10 +31,10 @@ fn listed_tools() -> Vec<Value> {
             let mut line = String::new();
             let read = reader.read_line(&mut line).expect("read from the server");
             assert!(read > 0, "the server closed stdout");
-            if let Ok(reply) = serde_json::from_str::<Value>(&line) {
-                if reply.get("id") == Some(&json!(id)) {
-                    return reply;
-                }
+            if let Ok(reply) = serde_json::from_str::<Value>(&line)
+                && reply.get("id") == Some(&json!(id))
+            {
+                return reply;
             }
         }
     };

@@ -171,14 +171,14 @@ fn record(world: &mut World) {
     let outcome = process_remote_query_request(In(Some(query)), world).map_err(|e| e.message);
 
     let mut ring = world.resource_mut::<Ring>();
-    if let Ok(result) = &outcome {
-        if result.to_string().len() > MAX_SAMPLE_BYTES {
-            ring.recording = false;
-            ring.stopped = Some(format!(
-                "frame {frame}: the query result is over {MAX_SAMPLE_BYTES} bytes; narrow the query (fewer components or a filter) and start again"
-            ));
-            return;
-        }
+    if let Ok(result) = &outcome
+        && result.to_string().len() > MAX_SAMPLE_BYTES
+    {
+        ring.recording = false;
+        ring.stopped = Some(format!(
+            "frame {frame}: the query result is over {MAX_SAMPLE_BYTES} bytes; narrow the query (fewer components or a filter) and start again"
+        ));
+        return;
     }
     let fired = match (&outcome, &ring.trigger) {
         (Ok(result), Some(trigger)) => trigger_fires(trigger, result),
@@ -234,13 +234,14 @@ fn handle_ring(In(params): In<RingParams>, world: &mut World) -> Result<Value, S
             if frames == 0 || frames > MAX_FRAMES {
                 return Err(format!("frames must be 1..={MAX_FRAMES}, got {frames}"));
             }
-            if let Some(trigger) = &params.trigger {
-                if !trigger.pointer.is_empty() && !trigger.pointer.starts_with('/') {
-                    return Err(format!(
-                        "trigger.pointer `{}` is not a JSON pointer (it must be empty or start with `/`, e.g. `/0/components/my_game::Health`); it could never match",
-                        trigger.pointer
-                    ));
-                }
+            if let Some(trigger) = &params.trigger
+                && !trigger.pointer.is_empty()
+                && !trigger.pointer.starts_with('/')
+            {
+                return Err(format!(
+                    "trigger.pointer `{}` is not a JSON pointer (it must be empty or start with `/`, e.g. `/0/components/my_game::Health`); it could never match",
+                    trigger.pointer
+                ));
             }
             // Refuse a query the game rejects now, with the game's own message, rather than record errors.
             process_remote_query_request(In(Some(query.clone())), world)

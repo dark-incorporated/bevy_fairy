@@ -188,13 +188,13 @@ impl DebugCommandRouter {
                 if system_name.is_empty() {
                     return Err(Error::DebugError("System name cannot be empty".to_string()));
                 }
-                if let Some(duration) = duration_ms {
-                    if *duration > 300_000 {
-                        // 5 minutes max
-                        return Err(Error::DebugError(
-                            "Profile duration too long (max 5 minutes)".to_string(),
-                        ));
-                    }
+                if let Some(duration) = duration_ms
+                    && *duration > 300_000
+                {
+                    // 5 minutes max
+                    return Err(Error::DebugError(
+                        "Profile duration too long (max 5 minutes)".to_string(),
+                    ));
                 }
             }
             DebugCommand::ExecuteQuery { query, limit, .. } => {
@@ -203,12 +203,12 @@ impl DebugCommandRouter {
                         "Too many components in query (max 20)".to_string(),
                     ));
                 }
-                if let Some(l) = limit {
-                    if *l > 10_000 {
-                        return Err(Error::DebugError(
-                            "Query limit too high (max 10,000)".to_string(),
-                        ));
-                    }
+                if let Some(l) = limit
+                    && *l > 10_000
+                {
+                    return Err(Error::DebugError(
+                        "Query limit too high (max 10,000)".to_string(),
+                    ));
                 }
             }
             DebugCommand::ProfileMemory {
@@ -216,39 +216,39 @@ impl DebugCommandRouter {
                 duration_seconds,
                 ..
             } => {
-                if let Some(systems) = target_systems {
-                    if systems.len() > 100 {
-                        return Err(Error::DebugError(
-                            "Too many target systems (max 100)".to_string(),
-                        ));
-                    }
+                if let Some(systems) = target_systems
+                    && systems.len() > 100
+                {
+                    return Err(Error::DebugError(
+                        "Too many target systems (max 100)".to_string(),
+                    ));
                 }
-                if let Some(duration) = duration_seconds {
-                    if *duration > 86400 {
-                        // 24 hours max
-                        return Err(Error::DebugError(
-                            "Duration too long (max 24 hours)".to_string(),
-                        ));
-                    }
+                if let Some(duration) = duration_seconds
+                    && *duration > 86400
+                {
+                    // 24 hours max
+                    return Err(Error::DebugError(
+                        "Duration too long (max 24 hours)".to_string(),
+                    ));
                 }
             }
             DebugCommand::DetectMemoryLeaks { target_systems }
             | DebugCommand::AnalyzeMemoryTrends { target_systems } => {
-                if let Some(systems) = target_systems {
-                    if systems.len() > 100 {
-                        return Err(Error::DebugError(
-                            "Too many target systems (max 100)".to_string(),
-                        ));
-                    }
+                if let Some(systems) = target_systems
+                    && systems.len() > 100
+                {
+                    return Err(Error::DebugError(
+                        "Too many target systems (max 100)".to_string(),
+                    ));
                 }
             }
             DebugCommand::StopMemoryProfiling { session_id } => {
-                if let Some(id) = session_id {
-                    if id.len() > 100 {
-                        return Err(Error::DebugError(
-                            "Session ID too long (max 100 chars)".to_string(),
-                        ));
-                    }
+                if let Some(id) = session_id
+                    && id.len() > 100
+                {
+                    return Err(Error::DebugError(
+                        "Session ID too long (max 100 chars)".to_string(),
+                    ));
                 }
             }
             DebugCommand::Custom { name, .. } => {
@@ -279,13 +279,13 @@ impl DebugCommandRouter {
                 if entity_ids.iter().any(|&id| id > 0xFFFF_FFFF) {
                     return Err(Error::DebugError("Entity ID too large".to_string()));
                 }
-                if let Some(l) = limit {
-                    if *l > crate::server::entity_inspector::MAX_BATCH_SIZE {
-                        return Err(Error::DebugError(format!(
-                            "Batch limit too high (max: {})",
-                            crate::server::entity_inspector::MAX_BATCH_SIZE
-                        )));
-                    }
+                if let Some(l) = limit
+                    && *l > crate::server::entity_inspector::MAX_BATCH_SIZE
+                {
+                    return Err(Error::DebugError(format!(
+                        "Batch limit too high (max: {})",
+                        crate::server::entity_inspector::MAX_BATCH_SIZE
+                    )));
                 }
             }
             _ => {} // Other commands are safe

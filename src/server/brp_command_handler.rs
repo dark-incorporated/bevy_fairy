@@ -63,7 +63,7 @@ pub struct CommandHandlerMetadata {
 /// a request and their priority.
 ///
 /// # Example
-/// ```ignore
+/// ```text
 /// struct MyHandler;
 ///
 /// #[async_trait]

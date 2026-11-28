@@ -86,12 +86,12 @@ impl Change {
 
     /// Calculate rate of change for numeric values
     pub fn calculate_rate_of_change(&mut self, time_delta: Duration) {
-        if let (Some(old), Some(new)) = (&self.old_value, &self.new_value) {
-            if let (Some(old_num), Some(new_num)) = (old.as_f64(), new.as_f64()) {
-                let delta_seconds = time_delta.as_secs_f64();
-                if delta_seconds > 0.0 {
-                    self.rate_of_change = Some((new_num - old_num) / delta_seconds);
-                }
+        if let (Some(old), Some(new)) = (&self.old_value, &self.new_value)
+            && let (Some(old_num), Some(new_num)) = (old.as_f64(), new.as_f64())
+        {
+            let delta_seconds = time_delta.as_secs_f64();
+            if delta_seconds > 0.0 {
+                self.rate_of_change = Some((new_num - old_num) / delta_seconds);
             }
         }
     }
@@ -355,45 +355,44 @@ impl GameRules {
     #[must_use]
     pub fn is_change_unexpected(&self, change: &Change) -> bool {
         // Check immutable components
-        if let Some(component_type) = &change.component_type {
-            if self.immutable_components.contains(component_type) {
-                return true;
-            }
+        if let Some(component_type) = &change.component_type
+            && self.immutable_components.contains(component_type)
+        {
+            return true;
         }
 
         // Check rate of change limits
-        if let Some(rate) = change.rate_of_change {
-            if let Some(component_type) = &change.component_type {
-                match component_type.as_str() {
-                    "Transform" => {
-                        if let Some(max_pos_rate) = self.max_position_change_per_second {
-                            if rate.abs() > max_pos_rate {
-                                return true;
-                            }
-                        }
+        if let Some(rate) = change.rate_of_change
+            && let Some(component_type) = &change.component_type
+        {
+            match component_type.as_str() {
+                "Transform" => {
+                    if let Some(max_pos_rate) = self.max_position_change_per_second
+                        && rate.abs() > max_pos_rate
+                    {
+                        return true;
                     }
-                    "Velocity" => {
-                        if let Some(max_vel_rate) = self.max_velocity_change_per_second {
-                            if rate.abs() > max_vel_rate {
-                                return true;
-                            }
-                        }
-                    }
-                    _ => {}
                 }
+                "Velocity" => {
+                    if let Some(max_vel_rate) = self.max_velocity_change_per_second
+                        && rate.abs() > max_vel_rate
+                    {
+                        return true;
+                    }
+                }
+                _ => {}
             }
         }
 
         // Check value ranges
         if let (Some(component_type), Some(new_value)) = (&change.component_type, &change.new_value)
+            && let Some(num_value) = new_value.as_f64()
         {
-            if let Some(num_value) = new_value.as_f64() {
-                let field_key = format!("{component_type}.value");
-                if let Some((min, max)) = self.expected_value_ranges.get(&field_key) {
-                    if num_value < *min || num_value > *max {
-                        return true;
-                    }
-                }
+            let field_key = format!("{component_type}.value");
+            if let Some((min, max)) = self.expected_value_ranges.get(&field_key)
+                && (num_value < *min || num_value > *max)
+            {
+                return true;
             }
         }
 

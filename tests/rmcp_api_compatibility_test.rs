@@ -11,7 +11,6 @@ use bevy_fairy::{
 use rmcp::{handler::server::ServerHandler, model::*};
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tokio_test;
 
 /// Test that BevyDebuggerTools implements ServerHandler correctly
 #[tokio::test]
@@ -95,7 +94,6 @@ async fn test_server_handler_traits() {
 async fn test_tool_schema_generation() {
     // TODO: Add schemars dependency if schema validation is needed
     // use schemars::JsonSchema;
-    use bevy_fairy::server::mcp_tools::{ExperimentRequest, HypothesisRequest, ObserveRequest};
 
     // Test that our request structures can be created (basic structure validation)
     // let observe_schema = schemars::schema_for!(ObserveRequest);

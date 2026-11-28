@@ -310,17 +310,17 @@ impl TimelineBranchManager {
         branch_point_frame: usize,
     ) -> Result<BranchId> {
         // Validate parent exists if specified
-        if let Some(parent) = parent_id {
-            if !self.branches.contains_key(&parent) {
-                return Err(Error::Validation(format!(
-                    "Parent branch {} not found",
-                    parent.to_string()
-                )));
-            }
-
-            // Check for circular dependencies - we don't need this check here
-            // since we're creating a new branch, not modifying an existing one
+        if let Some(parent) = parent_id
+            && !self.branches.contains_key(&parent)
+        {
+            return Err(Error::Validation(format!(
+                "Parent branch {} not found",
+                parent.to_string()
+            )));
         }
+
+        // Check for circular dependencies - we don't need this check here
+        // since we're creating a new branch, not modifying an existing one
 
         // Check branch limit
         if self.branches.len() >= self.max_branches {
